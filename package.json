@@ -72,6 +72,7 @@
     "appId": "bot.helio.agent",
     "productName": "Helio Agent",
     "artifactName": "HelioAgent-${version}-${arch}.${ext}",
+    "icon": "public/favicon.png",
     "files": [
       "electron/**/*",
       "package.json"
@@ -80,6 +81,7 @@
       "main": "electron/main.cjs"
     },
     "mac": {
+      "icon": "public/favicon.png",
       "category": "public.app-category.developer-tools",
       "target": [
         {
