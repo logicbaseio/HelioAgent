@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HELIO_HOME="${HELIO_HOME:-$HOME/.helio}"
+HELIO_APP_DIR="${HELIO_APP_DIR:-$HELIO_HOME/agent}"
+HELIO_STATE_DIR="$HELIO_HOME/run"
+HELIO_LOG_DIR="$HELIO_HOME/logs"
+HELIO_ENV_FILE="$HELIO_APP_DIR/.env"
+HELIO_PORT="${HELIO_PORT:-5050}"
+HELIO_HOST="${HELIO_HOST:-127.0.0.1}"
+
+dashboard_pid_file="$HELIO_STATE_DIR/dashboard.pid"
+worker_pid_file="$HELIO_STATE_DIR/helio-code-worker.pid"
+
+usage() {
+  cat <<EOF
+Helio Agent CLI
+
+Usage:
+  helio start          Start dashboard + local workers
+  helio stop           Stop dashboard + local workers
+  helio restart        Restart Helio
+  helio status         Show process status
+  helio doctor         Check local prerequisites
+  helio update         Pull latest code and install dependencies
+  helio logs [target]  Tail logs: dashboard, worker, or all
+  helio open           Open dashboard in browser
+
+Environment:
+  HELIO_HOME=$HELIO_HOME
+  HELIO_APP_DIR=$HELIO_APP_DIR
+  HELIO_HOST=$HELIO_HOST
+  HELIO_PORT=$HELIO_PORT
+EOF
+}
+
+ensure_dirs() {
+  mkdir -p "$HELIO_HOME" "$HELIO_STATE_DIR" "$HELIO_LOG_DIR"
+}
+
+fail() {
+  echo "Helio: $*" >&2
+  exit 1
+}
+
+require_app_dir() {
+  [ -d "$HELIO_APP_DIR" ] || fail "agent code not found at $HELIO_APP_DIR. Run the installer first."
+  [ -f "$HELIO_APP_DIR/package.json" ] || fail "package.json not found in $HELIO_APP_DIR."
+}
+
+is_pid_alive() {
+  local pid="${1:-}"
+  [ -n "$pid" ] && kill -0 "$pid" >/dev/null 2>&1
+}
+
+read_pid() {
+  local file="$1"
+  [ -f "$file" ] && cat "$file" || true
+}
+
+process_status() {
+  local name="$1"
+  local file="$2"
+  local pid
+  pid="$(read_pid "$file")"
+  if is_pid_alive "$pid"; then
+    echo "$name: running (pid $pid)"
+  else
+    echo "$name: stopped"
+  fi
+}
+
+ensure_env() {
+  require_app_dir
+  if [ ! -f "$HELIO_ENV_FILE" ]; then
+    if [ -f "$HELIO_APP_DIR/.env.example" ]; then
+      cp "$HELIO_APP_DIR/.env.example" "$HELIO_ENV_FILE"
+    else
+      touch "$HELIO_ENV_FILE"
+    fi
+    {
+      echo ""
+      echo "# Local Helio Agent runtime"
+      echo "HELIO_PUBLIC_URL=http://$HELIO_HOST:$HELIO_PORT"
+      echo "HELIO_CODE_AGENT_COMMAND=\"node $HELIO_APP_DIR/scripts/helio-code-agent.mjs\""
+      echo "HELIO_CODE_WORKSPACE_ROOT=$HELIO_HOME/workspaces"
+      echo "HELIO_CODE_AUTO_MIGRATE=true"
+    } >> "$HELIO_ENV_FILE"
+  fi
+}
+
+ensure_dependencies() {
+  require_app_dir
+  if [ ! -d "$HELIO_APP_DIR/node_modules" ]; then
+    echo "Installing Helio dependencies..."
+    (cd "$HELIO_APP_DIR" && npm install)
+  fi
+}
+
+open_dashboard() {
+  local url="http://$HELIO_HOST:$HELIO_PORT/dashboard"
+  if command -v open >/dev/null 2>&1; then
+    open "$url" >/dev/null 2>&1 || true
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$url" >/dev/null 2>&1 || true
+  else
+    echo "Open $url"
+  fi
+}
+
+start_dashboard() {
+  local pid
+  pid="$(read_pid "$dashboard_pid_file")"
+  if is_pid_alive "$pid"; then
+    echo "Dashboard already running on http://$HELIO_HOST:$HELIO_PORT/dashboard (pid $pid)"
+    return
+  fi
+  echo "Starting Helio dashboard on http://$HELIO_HOST:$HELIO_PORT/dashboard"
+  (
+    cd "$HELIO_APP_DIR"
+    nohup npm run dev -- --host "$HELIO_HOST" --port "$HELIO_PORT" > "$HELIO_LOG_DIR/dashboard.log" 2>&1 &
+    echo $! > "$dashboard_pid_file"
+  )
+}
+
+start_worker() {
+  local pid
+  pid="$(read_pid "$worker_pid_file")"
+  if is_pid_alive "$pid"; then
+    echo "Helio Code worker already running (pid $pid)"
+    return
+  fi
+  if [ ! -f "$HELIO_APP_DIR/scripts/helio-code-worker.mjs" ]; then
+    echo "Helio Code worker script not found; skipping worker start."
+    return
+  fi
+  echo "Starting Helio Code worker"
+  (
+    cd "$HELIO_APP_DIR"
+    nohup npm run helio-code:worker > "$HELIO_LOG_DIR/helio-code-worker.log" 2>&1 &
+    echo $! > "$worker_pid_file"
+  )
+}
+
+cmd_start() {
+  ensure_dirs
+  require_app_dir
+  ensure_env
+  ensure_dependencies
+  start_dashboard
+  start_worker
+  sleep 1
+  status
+  open_dashboard
+}
+
+stop_pid_file() {
+  local name="$1"
+  local file="$2"
+  local pid
+  pid="$(read_pid "$file")"
+  if is_pid_alive "$pid"; then
+    echo "Stopping $name (pid $pid)"
+    kill "$pid" >/dev/null 2>&1 || true
+  fi
+  rm -f "$file"
+}
+
+cmd_stop() {
+  ensure_dirs
+  stop_pid_file "dashboard" "$dashboard_pid_file"
+  stop_pid_file "Helio Code worker" "$worker_pid_file"
+}
+
+status() {
+  ensure_dirs
+  process_status "dashboard" "$dashboard_pid_file"
+  process_status "helio-code-worker" "$worker_pid_file"
+  echo "dashboard-url: http://$HELIO_HOST:$HELIO_PORT/dashboard"
+}
+
+doctor() {
+  echo "Helio doctor"
+  command -v git >/dev/null 2>&1 && echo "git: ok" || echo "git: missing"
+  command -v node >/dev/null 2>&1 && echo "node: $(node --version)" || echo "node: missing"
+  command -v npm >/dev/null 2>&1 && echo "npm: $(npm --version)" || echo "npm: missing"
+  [ -d "$HELIO_APP_DIR" ] && echo "app-dir: $HELIO_APP_DIR" || echo "app-dir: missing ($HELIO_APP_DIR)"
+  [ -f "$HELIO_ENV_FILE" ] && echo "env: $HELIO_ENV_FILE" || echo "env: missing"
+  status
+}
+
+cmd_update() {
+  require_app_dir
+  echo "Updating Helio from git..."
+  (cd "$HELIO_APP_DIR" && git pull --ff-only && npm install)
+  echo "Updated. Run 'helio restart' to reload."
+}
+
+cmd_logs() {
+  ensure_dirs
+  local target="${1:-all}"
+  case "$target" in
+    dashboard) tail -f "$HELIO_LOG_DIR/dashboard.log" ;;
+    worker) tail -f "$HELIO_LOG_DIR/helio-code-worker.log" ;;
+    all) tail -f "$HELIO_LOG_DIR/dashboard.log" "$HELIO_LOG_DIR/helio-code-worker.log" ;;
+    *) fail "unknown log target: $target" ;;
+  esac
+}
+
+cmd="${1:-help}"
+case "$cmd" in
+  start) cmd_start ;;
+  stop) cmd_stop ;;
+  restart) cmd_stop; cmd_start ;;
+  status) status ;;
+  doctor) doctor ;;
+  update) cmd_update ;;
+  logs) shift || true; cmd_logs "${1:-all}" ;;
+  open) open_dashboard ;;
+  help|--help|-h) usage ;;
+  *) usage; exit 1 ;;
+esac

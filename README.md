@@ -1,10 +1,40 @@
 # Helio Dashboard
 
+## One-Command Local Agent Install
+
+Target public installer:
+
+```bash
+curl -fsSL https://get.helio.bot/install.sh | bash
+helio start
+```
+
+GitHub raw fallback while `get.helio.bot` is being wired:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/logicbaseio/HelioAgent/main/install.sh | bash
+helio start
+```
+
+This installs Helio into `~/.helio/agent`, adds the `helio` CLI, starts the dashboard on `http://127.0.0.1:5050/dashboard`, and starts the local Helio Code worker.
+
 ## Run
 
 ```bash
 npm install
 npm run dev
+```
+
+## CLI
+
+```bash
+helio start
+helio stop
+helio restart
+helio status
+helio doctor
+helio update
+helio logs
 ```
 
 ## Current Structure
