@@ -20,7 +20,10 @@
     "lint": "eslint src --ext .js,.jsx",
     "test": "vitest run",
     "deadcode": "knip",
-    "shelllint": "sh -c 'if command -v shellcheck >/dev/null 2>&1; then scripts=$(find . -type f -name \"*.sh\" | tr \"\\n\" \" \"); if [ -n \"$scripts\" ]; then shellcheck $scripts; else echo \"No shell scripts found\"; fi; else echo \"shellcheck not installed\"; fi'"
+    "shelllint": "sh -c 'if command -v shellcheck >/dev/null 2>&1; then scripts=$(find . -type f -name \"*.sh\" | tr \"\\n\" \" \"); if [ -n \"$scripts\" ]; then shellcheck $scripts; else echo \"No shell scripts found\"; fi; else echo \"shellcheck not installed\"; fi'",
+    "desktop:dev": "electron .",
+    "desktop:pack": "electron-builder --mac dmg --arm64",
+    "desktop:release": "npm run build && electron-builder --mac dmg --arm64"
   },
   "dependencies": {
     "@sparticuz/chromium": "^148.0.0",
@@ -53,6 +56,8 @@
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^6.0.2",
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^10.4.0",
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
@@ -61,5 +66,46 @@
     "typescript": "^5.8.3",
     "vite": "^8.0.13",
     "vitest": "^4.1.6"
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "bot.helio.agent",
+    "productName": "Helio Agent",
+    "artifactName": "HelioAgent-${version}-${arch}.${ext}",
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "Helio Agent ${version}",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
   }
 }
