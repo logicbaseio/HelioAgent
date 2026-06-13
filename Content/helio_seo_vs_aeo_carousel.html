@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:#111;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    min-height:100vh;font-family:'JetBrains Mono',monospace;
+    gap:16px;padding:24px 0;
+  }
+  .meta{font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:0.2em;}
+
+  .slide{width:480px;height:600px;position:relative;overflow:hidden;display:none;flex-shrink:0;}
+  .slide.active{display:block;}
+  .dark{background:#080808;}
+  .light{background:#C8FF00;}
+
+  .grid{position:absolute;inset:0;z-index:0;pointer-events:none;}
+  .dark .grid{background-image:linear-gradient(rgba(200,255,0,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(200,255,0,0.035) 1px,transparent 1px);background-size:30px 30px;}
+  .light .grid{background-image:linear-gradient(rgba(0,0,0,0.07) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,0.07) 1px,transparent 1px);background-size:30px 30px;}
+  .scanline{position:absolute;inset:0;z-index:1;pointer-events:none;background:repeating-linear-gradient(to bottom,transparent 0px,transparent 3px,rgba(0,0,0,0.04) 3px,rgba(0,0,0,0.04) 4px);}
+
+  .top-bar{position:absolute;top:0;left:0;right:0;height:46px;z-index:20;display:flex;justify-content:space-between;align-items:center;padding:0 24px;}
+  .dark .top-bar{border-bottom:1px solid rgba(200,255,0,0.1);}
+  .light .top-bar{border-bottom:1px solid rgba(0,0,0,0.12);}
+  .brand{font-size:14px;font-weight:800;letter-spacing:0.18em;}
+  .dark .brand{color:#C8FF00;}
+  .light .brand{color:#080808;}
+  .tag{font-size:7.5px;letter-spacing:0.18em;font-weight:500;}
+  .dark .tag{color:rgba(200,255,0,0.4);}
+  .light .tag{color:rgba(0,0,0,0.38);}
+
+  .bot-bar{position:absolute;bottom:0;left:0;right:0;height:40px;z-index:20;display:flex;justify-content:space-between;align-items:center;padding:0 24px;}
+  .dark .bot-bar{border-top:1px solid rgba(200,255,0,0.08);}
+  .light .bot-bar{border-top:1px solid rgba(0,0,0,0.1);}
+  .bot-url{font-size:8px;letter-spacing:0.16em;font-weight:500;}
+  .dark .bot-url{color:rgba(200,255,0,0.25);}
+  .light .bot-url{color:rgba(0,0,0,0.28);}
+  .dots{display:flex;gap:4px;align-items:center;}
+  .dot{width:5px;height:5px;border-radius:50%;transition:all 0.3s;}
+  .dark .dot{background:rgba(200,255,0,0.15);}
+  .dark .dot.on{background:#C8FF00;width:14px;border-radius:3px;}
+  .light .dot{background:rgba(0,0,0,0.15);}
+  .light .dot.on{background:#080808;width:14px;border-radius:3px;}
+
+  .content{position:absolute;top:46px;bottom:40px;left:0;right:0;z-index:10;}
+  .bnum{position:absolute;font-size:180px;font-weight:800;line-height:1;letter-spacing:-0.05em;pointer-events:none;z-index:2;}
+  .dark .bnum{color:rgba(200,255,0,0.04);}
+  .light .bnum{color:rgba(0,0,0,0.05);}
+
+  /* STATUS */
+  .status{display:flex;align-items:center;gap:6px;font-size:8px;letter-spacing:0.16em;font-weight:600;}
+  .sdot{width:6px;height:6px;border-radius:50%;animation:pulse 2s ease-in-out infinite;}
+  .dark .status{color:rgba(200,255,0,0.6);}
+  .dark .sdot{background:#C8FF00;box-shadow:0 0 6px #C8FF00;}
+  .light .status{color:rgba(0,0,0,0.5);}
+  .light .sdot{background:#080808;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+  /* TYPOGRAPHY */
+  .eyebrow{font-size:8px;font-weight:600;letter-spacing:0.25em;text-transform:uppercase;}
+  .dark .eyebrow{color:rgba(200,255,0,0.5);}
+  .light .eyebrow{color:rgba(0,0,0,0.45);}
+  .hl{font-weight:800;line-height:1.08;letter-spacing:-0.03em;}
+  .dark .hl{color:#fff;}
+  .light .hl{color:#080808;}
+  .dark .hl .acc{color:#C8FF00;}
+  .light .hl .acc{-webkit-text-stroke:2px #080808;color:transparent;}
+  .body{font-size:11.5px;line-height:1.75;font-weight:400;}
+  .dark .body{color:rgba(255,255,255,0.38);}
+  .light .body{color:rgba(0,0,0,0.55);}
+  .rule{height:1px;}
+  .dark .rule{background:rgba(200,255,0,0.12);}
+  .light .rule{background:rgba(0,0,0,0.12);}
+
+  /* TERMINAL */
+  .term{font-size:10px;letter-spacing:0.04em;display:flex;align-items:center;gap:8px;border-radius:2px;padding:10px 14px;}
+  .dark .term{background:rgba(200,255,0,0.05);border:1px solid rgba(200,255,0,0.12);color:rgba(200,255,0,0.55);}
+  .light .term{background:rgba(0,0,0,0.07);border:1px solid rgba(0,0,0,0.12);color:rgba(0,0,0,0.48);}
+  .prompt{opacity:0.4;}
+  .cur{display:inline-block;width:6px;height:11px;vertical-align:middle;animation:blink 1s step-end infinite;flex-shrink:0;}
+  .dark .cur{background:#C8FF00;}
+  .light .cur{background:#080808;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+  /* VS TABLE */
+  .vs-table{width:100%;border-collapse:collapse;}
+  .vs-table th{font-size:9px;font-weight:700;letter-spacing:0.18em;padding:8px 10px;text-align:left;}
+  .vs-table td{font-size:10.5px;font-weight:400;padding:9px 10px;line-height:1.4;vertical-align:top;}
+  .vs-table tr{border-bottom:1px solid;}
+  .dark .vs-table tr{border-color:rgba(200,255,0,0.08);}
+  .light .vs-table tr{border-color:rgba(0,0,0,0.09);}
+  .dark .vs-table th{color:rgba(200,255,0,0.45);}
+  .light .vs-table th{color:rgba(0,0,0,0.4);}
+  .dark .vs-table td{color:rgba(255,255,255,0.5);}
+  .light .vs-table td{color:rgba(0,0,0,0.6);}
+  .col-old{width:44%;}
+  .col-div{width:12%;text-align:center;font-weight:800;font-size:10px;}
+  .dark .col-div{color:rgba(200,255,0,0.3);}
+  .light .col-div{color:rgba(0,0,0,0.25);}
+  .col-new{width:44%;}
+  .dark .col-new td,.dark .col-new th{color:#C8FF00 !important;}
+  .light .col-new td,.light .col-new th{color:#080808 !important;font-weight:600;}
+
+  /* PILL ROW */
+  .pill-row{display:flex;gap:8px;}
+  .pill{flex:1;padding:14px 12px;border-radius:3px;display:flex;flex-direction:column;gap:4px;}
+  .dark .pill{background:rgba(200,255,0,0.05);border:1px solid rgba(200,255,0,0.1);}
+  .light .pill{background:rgba(0,0,0,0.07);border:1px solid rgba(0,0,0,0.1);}
+  .pill-num{font-size:26px;font-weight:800;line-height:1;letter-spacing:-0.02em;}
+  .dark .pill-num{color:#C8FF00;}
+  .light .pill-num{color:#080808;}
+  .pill-lbl{font-size:8px;letter-spacing:0.08em;font-weight:500;}
+  .dark .pill-lbl{color:rgba(255,255,255,0.28);}
+  .light .pill-lbl{color:rgba(0,0,0,0.38);}
+
+  /* LIST */
+  .lst{display:flex;flex-direction:column;}
+  .li{display:flex;align-items:baseline;gap:12px;font-size:11.5px;line-height:1.4;padding:9px 0;}
+  .dark .li{border-bottom:1px solid rgba(200,255,0,0.07);color:rgba(255,255,255,0.55);}
+  .light .li{border-bottom:1px solid rgba(0,0,0,0.08);color:rgba(0,0,0,0.62);}
+  .li:last-child{border-bottom:none;}
+  .li-mk{font-size:9px;font-weight:700;letter-spacing:0.1em;flex-shrink:0;}
+  .dark .li-mk{color:#C8FF00;}
+  .light .li-mk{color:#080808;}
+
+  /* CTA */
+  .cta{display:inline-block;padding:14px 28px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;border-radius:2px;border:none;cursor:pointer;}
+  .dark .cta{background:#C8FF00;color:#080808;}
+  .light .cta{background:#080808;color:#C8FF00;}
+
+  /* LABEL BADGES */
+  .badge{display:inline-block;font-size:8px;font-weight:700;letter-spacing:0.18em;padding:4px 10px;border-radius:2px;}
+  .badge-old{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.4);}
+  .badge-old-l{background:rgba(0,0,0,0.1);color:rgba(0,0,0,0.45);}
+  .badge-new{background:#C8FF00;color:#080808;}
+  .badge-new-l{background:#080808;color:#C8FF00;}
+
+  /* SPLIT LAYOUT */
+  .split{display:flex;height:100%;}
+  .split-l{flex:1;display:flex;flex-direction:column;justify-content:center;padding:28px 20px 28px 24px;}
+  .split-r{flex:1;display:flex;flex-direction:column;justify-content:center;padding:28px 24px 28px 20px;}
+  .split-divider{width:1px;align-self:stretch;margin:20px 0;}
+  .dark .split-divider{background:rgba(200,255,0,0.12);}
+  .light .split-divider{background:rgba(0,0,0,0.12);}
+
+  /* TICKER */
+  .ticker-wrap{overflow:hidden;white-space:nowrap;height:30px;display:flex;align-items:center;}
+  .ticker-inner{display:inline-block;animation:tick 14s linear infinite;}
+  @keyframes tick{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+  /* NAV */
+  .nav-row{display:flex;gap:10px;}
+  .nbtn{background:rgba(200,255,0,0.07);border:1px solid rgba(200,255,0,0.18);color:#C8FF00;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;padding:9px 22px;cursor:pointer;border-radius:2px;transition:background 0.2s;}
+  .nbtn:hover{background:rgba(200,255,0,0.14);}
+  .nbtn:disabled{opacity:0.2;cursor:default;}
+  .dbtn{background:rgba(200,255,0,0.1);border:1px solid rgba(200,255,0,0.22);color:#C8FF00;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;padding:9px 22px;cursor:pointer;border-radius:2px;}
+  .dbtn:hover{background:rgba(200,255,0,0.18);}
+</style>
+</head>
+<body>
+
+<div class="meta" id="counter">01 / 08</div>
+
+<!-- ══════════════════════════════
+  SLIDE 1 — DARK — COVER
+══════════════════════════════ -->
+<div class="slide dark active" id="s0">
+  <div class="grid"></div><div class="scanline"></div>
+  <div class="bnum" style="right:-10px;bottom:-40px;">01</div>
+
+  <!-- diagonal fill -->
+  <svg style="position:absolute;top:46px;left:0;width:480px;height:514px;z-index:3;pointer-events:none;" viewBox="0 0 480 514" preserveAspectRatio="none">
+    <polygon points="0,514 0,260 480,80 480,514" fill="rgba(200,255,0,0.022)"/>
+    <line x1="0" y1="260" x2="480" y2="80" stroke="rgba(200,255,0,0.1)" stroke-width="1"/>
+  </svg>
+
+  <!-- orbital top-right -->
+  <svg style="position:absolute;top:40px;right:-50px;z-index:4;opacity:0.15;" width="240" height="240" viewBox="0 0 240 240">
+    <circle cx="120" cy="120" r="110" fill="none" stroke="#C8FF00" stroke-width="1" stroke-dasharray="6 7"/>
+    <circle cx="120" cy="120" r="72"  fill="none" stroke="#C8FF00" stroke-width="1" stroke-dasharray="4 9"/>
+    <circle cx="120" cy="120" r="34"  fill="none" stroke="#C8FF00" stroke-width="1"/>
+    <circle cx="120" cy="10"  r="7"   fill="#C8FF00"/>
+    <circle cx="192" cy="168" r="5"   fill="#C8FF00"/>
+    <circle cx="50"  cy="176" r="4"   fill="#C8FF00"/>
+  </svg>
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="status"><div class="sdot"></div>AGENT ONLINE</div>
+  </div>
+
+  <div class="content" style="display:flex;flex-direction:column;justify-content:flex-end;padding:32px 28px 28px;">
+    <div class="eyebrow" style="margin-bottom:16px;">SEO vs AEO/GEO — The Full Picture</div>
+    <div class="hl" style="font-size:46px;margin-bottom:20px;">
+      The rules of<br>search just<br><span class="acc">changed forever.</span>
+    </div>
+    <div class="rule" style="margin-bottom:20px;"></div>
+    <div class="body" style="margin-bottom:24px;">
+      Traditional SEO still matters. But it's no longer<br>
+      enough. Here's what every brand needs to know.
+    </div>
+    <div class="term">
+      <span class="prompt">$</span>
+      <span>helio --compare seo aeo geo --output strategy</span>
+      <span class="cur"></span>
+    </div>
+  </div>
+
+  <div class="bot-bar"><div class="bot-url">helio.bot</div><div class="dots" id="d0"></div></div>
+</div>
+
+<!-- ══════════════════════════════
+  SLIDE 2 — LIGHT — WHAT CHANGED
+══════════════════════════════ -->
+<div class="slide light" id="s1">
+  <div class="grid"></div><div class="scanline"></div>
+  <div class="bnum" style="right:-10px;bottom:-40px;">02</div>
+  <div style="position:absolute;top:46px;left:0;right:0;height:4px;background:#080808;z-index:5;"></div>
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="tag">SEO vs AEO/GEO // 02 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:38px 28px 24px;">
+    <div class="eyebrow" style="margin-bottom:14px;">What Changed</div>
+    <div class="hl" style="font-size:38px;margin-bottom:22px;">
+      Search used to<br>mean Google.<br>Now it means<br><span class="acc">everything.</span>
+    </div>
+    <div class="lst">
+      <div class="li"><span class="li-mk">2020</span><span>Google = 93% of all search queries</span></div>
+      <div class="li"><span class="li-mk">2023</span><span>ChatGPT launches. 100M users in 60 days.</span></div>
+      <div class="li"><span class="li-mk">2024</span><span>Perplexity, Gemini, Claude enter search</span></div>
+      <div class="li"><span class="li-mk">2025</span><span>AI Overviews replace 30%+ of blue link clicks</span></div>
+      <div class="li"><span class="li-mk">NOW</span><span><strong>Multiple engines. One brand. You need all of them.</strong></span></div>
+    </div>
+  </div>
+
+  <div class="bot-bar"><div class="bot-url">helio.bot</div><div class="dots" id="d1"></div></div>
+</div>
+
+<!-- ══════════════════════════════
+  SLIDE 3 — DARK — THE DEFINITIONS
+══════════════════════════════ -->
+<div class="slide dark" id="s2">
+  <div class="grid"></div><div class="scanline"></div>
+  <div class="bnum" style="left:-10px;bottom:-40px;">03</div>
+  <div style="position:absolute;top:46px;bottom:40px;left:0;width:4px;background:#C8FF00;z-index:5;"></div>
+
+  <div class="top-bar" style="padding-left:28px;">
+    <div class="brand">HELIO</div>
+    <div class="tag">SEO vs AEO/GEO // 03 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:28px 28px 24px 32px;">
+    <div class="eyebrow" style="margin-bottom:14px;">The Three Engines</div>
+    <div class="hl" style="font-size:32px;margin-bottom:22px;">Know the difference.<br><span class="acc">Own all three.</span></div>
+
+    <div class="lst">
+      <div class="li" style="flex-direction:column;align-items:flex-start;gap:4px;">
+        <span class="li-mk">SEO — Search Engine Optimization</span>
+        <span>Rank in Google/Bing. Blue links, maps, snippets. Intent-driven keywords, backlinks, technical health.</span>
+      </div>
+      <div class="li" style="flex-direction:column;align-items:flex-start;gap:4px;">
+        <span class="li-mk">AEO — Answer Engine Optimization</span>
+        <span>Get cited by AI (ChatGPT, Perplexity, Claude). Structured answers, entity clarity, schema markup.</span>
+      </div>
+      <div class="li" style="flex-direction:column;align-items:flex-start;gap:4px;">
+        <span class="li-mk">GEO — Generative Engine Optimization</span>
+        <span>Appear in AI-generated overviews and summaries. Authority, freshness, semantic depth.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="bot-bar" style="padding-left:28px;"><div class="bot-url">helio.bot</div><div class="dots" id="d2"></div></div>
+</div>
+
+<!-- ══════════════════════════════
+  SLIDE 4 — LIGHT — HEAD TO HEAD
+══════════════════════════════ -->
+<div class="slide light" id="s3">
+  <div class="grid"></div><div class="scanline"></div>
+  <div style="position:absolute;top:46px;right:0;bottom:40px;width:4px;background:#080808;z-index:5;"></div>
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="tag">SEO vs AEO/GEO // 04 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:22px 32px 18px 28px;">
+    <div class="eyebrow" style="margin-bottom:12px;">Head to Head</div>
+    <div class="hl" style="font-size:30px;margin-bottom:18px;">Traditional SEO<br>vs <span class="acc">AEO/GEO</span></div>
+
+    <table class="vs-table">
+      <thead>
+        <tr>
+          <th class="col-old">TRADITIONAL SEO</th>
+          <th class="col-div"></th>
+          <th class="col-new">AEO / GEO</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Google / Bing</td>
+          <td class="col-div" style="text-align:center;color:rgba(0,0,0,0.2);font-size:9px;">VS</td>
+          <td style="color:#080808;font-weight:600;">ChatGPT, Perplexity, Gemini</td>
+        </tr>
+        <tr>
+          <td>Rank in blue links</td>
+          <td class="col-div" style="text-align:center;color:rgba(0,0,0,0.2);font-size:9px;">VS</td>
+          <td style="color:#080808;font-weight:600;">Get cited as the answer</td>
+        </tr>
+        <tr>
+          <td>Keywords + backlinks</td>
+          <td class="col-div" style="text-align:center;color:rgba(0,0,0,0.2);font-size:9px;">VS</td>
+          <td style="color:#080808;font-weight:600;">Entity clarity + schema</td>
+        </tr>
+        <tr>
+          <td>User clicks to find</td>
+          <td class="col-div" style="text-align:center;color:rgba(0,0,0,0.2);font-size:9px;">VS</td>
+          <td style="color:#080808;font-weight:600;">AI delivers directly</td>
+        </tr>
+        <tr>
+          <td>10 blue link results</td>
+          <td class="col-div" style="text-align:center;color:rgba(0,0,0,0.2);font-size:9px;">VS</td>
+          <td style="color:#080808;font-weight:600;">1 cited source. Winner takes all.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="bot-bar"><div class="bot-url">helio.bot</div><div class="dots" id="d3"></div></div>
+</div>
+
+<!-- ══════════════════════════════
+  SLIDE 5 — DARK — THE OVERLAP
+══════════════════════════════ -->
+<div class="slide dark" id="s4">
+  <div class="grid"></div><div class="scanline"></div>
+  <div class="bnum" style="right:-10px;top:40px;font-size:150px;">05</div>
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="tag">SEO vs AEO/GEO // 05 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:28px 28px 24px;">
+    <div class="eyebrow" style="margin-bottom:14px;">The Good News</div>
+    <div class="hl" style="font-size:34px;margin-bottom:20px;">What works for SEO<br>still helps <span class="acc">AEO/GEO.</span></div>
+    <div class="body" style="margin-bottom:20px;">They share a foundation. A strong SEO base makes AEO/GEO faster to build. You're not starting over — you're extending.</div>
+    <div class="lst">
+      <div class="li"><span class="li-mk">✓</span><span><strong style="color:#fff">Technical health</strong> — fast, crawlable sites rank AND get cited</span></div>
+      <div class="li"><span class="li-mk">✓</span><span><strong style="color:#fff">Quality content</strong> — depth and clarity wins everywhere</span></div>
+      <div class="li"><span class="li-mk">✓</span><span><strong style="color:#fff">Authority & backlinks</strong> — trust signals AI models rely on</span></div>
+      <div class="li"><span class="li-mk">✓</span><span><strong style="color:#fff">Freshness</strong> — updated content favoured by all engines</span></div>
+    </div>
+  </div>
+
+  <div class="bot-bar"><div class="bot-url">helio.bot</div><div class="dots" id="d4"></div></div>
+</div>
+
+<!-- ══════════════════════════════
+  SLIDE 6 — LIGHT — WHAT'S DIFFERENT
+══════════════════════════════ -->
+<div class="slide light" id="s5">
+  <div class="grid"></div><div class="scanline"></div>
+  <div class="bnum" style="left:-10px;bottom:-40px;">06</div>
+
+  <!-- ticker strip -->
+  <div style="position:absolute;top:46px;left:0;right:0;height:30px;background:#080808;z-index:10;display:flex;align-items:center;overflow:hidden;">
+    <div class="ticker-inner" style="font-size:8.5px;font-weight:700;letter-spacing:0.2em;color:#C8FF00;white-space:nowrap;padding-left:100%;">
+      NEW RULES &nbsp;→&nbsp; ENTITY CLARITY &nbsp;·&nbsp; STRUCTURED ANSWERS &nbsp;·&nbsp; SCHEMA MARKUP &nbsp;·&nbsp; DIRECT Q&A FORMAT &nbsp;·&nbsp; AI CITATION AUTHORITY &nbsp;&nbsp;&nbsp;&nbsp; NEW RULES &nbsp;→&nbsp; ENTITY CLARITY &nbsp;·&nbsp; STRUCTURED ANSWERS &nbsp;·&nbsp; SCHEMA MARKUP &nbsp;·&nbsp; DIRECT Q&A FORMAT &nbsp;·&nbsp; AI CITATION AUTHORITY &nbsp;&nbsp;&nbsp;&nbsp;
+    </div>
+  </div>
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="tag">SEO vs AEO/GEO // 06 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:50px 28px 24px;">
+    <div class="eyebrow" style="margin-bottom:12px;">What AEO/GEO Adds</div>
+    <div class="hl" style="font-size:32px;margin-bottom:18px;">4 things SEO<br>alone <span class="acc">can't do.</span></div>
+    <div class="lst">
+      <div class="li"><span class="li-mk">01</span><span><strong>Entity clarity</strong> — AI must know precisely who you are and what you do</span></div>
+      <div class="li"><span class="li-mk">02</span><span><strong>Q&A structure</strong> — Direct answers, not keyword-stuffed paragraphs</span></div>
+      <div class="li"><span class="li-mk">03</span><span><strong>Schema markup</strong> — Machine-readable signals for AI parsers</span></div>
+      <div class="li"><span class="li-mk">04</span><span><strong>Citation building</strong> — Being referenced across sources AI models index</span></div>
+    </div>
+  </div>
+
+  <div class="bot-bar"><div class="bot-url">helio.bot</div><div class="dots" id="d5"></div></div>
+</div>
+
+<!-- ══════════════════════════════
+  SLIDE 7 — DARK — THE MISTAKE
+══════════════════════════════ -->
+<div class="slide dark" id="s6">
+  <div class="grid"></div><div class="scanline"></div>
+  <div class="bnum" style="right:-10px;bottom:-40px;">07</div>
+
+  <!-- split dark/accent top -->
+  <div style="position:absolute;top:46px;left:0;right:0;height:3px;background:#C8FF00;z-index:5;"></div>
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="tag">SEO vs AEO/GEO // 07 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:32px 28px 24px;">
+    <div class="eyebrow" style="margin-bottom:14px;">The Mistake Most Brands Make</div>
+    <div class="hl" style="font-size:36px;margin-bottom:20px;">Choosing one.<br>Losing <span class="acc">the other.</span></div>
+    <div class="body" style="margin-bottom:22px;">Abandoning SEO for AEO is wrong. Ignoring AEO for SEO is equally wrong. The brands winning right now run all three in parallel — continuously.</div>
+
+    <div class="pill-row">
+      <div class="pill">
+        <div class="pill-num" style="font-size:13px;color:rgba(255,255,255,0.3);">SEO ONLY</div>
+        <div class="pill-lbl" style="margin-top:4px;">Invisible to AI search.<br>Losing 30%+ of clicks<br>to AI Overviews.</div>
+      </div>
+      <div class="pill">
+        <div class="pill-num" style="font-size:13px;color:rgba(255,255,255,0.3);">AEO ONLY</div>
+        <div class="pill-lbl" style="margin-top:4px;">No organic foundation.<br>No compounding traffic.<br>No long-term equity.</div>
+      </div>
+      <div class="pill" style="border-color:rgba(200,255,0,0.3);background:rgba(200,255,0,0.08);">
+        <div class="pill-num" style="font-size:13px;">SEO + AEO + GEO</div>
+        <div class="pill-lbl" style="margin-top:4px;color:rgba(200,255,0,0.6);">Full coverage. All engines.<br>Compounding 24/7.<br>This is HELIO.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bot-bar"><div class="bot-url">helio.bot</div><div class="dots" id="d6"></div></div>
+</div>
+
+<!-- ══════════════════════════════
+  SLIDE 8 — LIGHT — CTA
+══════════════════════════════ -->
+<div class="slide light" id="s7">
+  <div class="grid"></div><div class="scanline"></div>
+
+  <!-- orbital deco bottom right -->
+  <svg style="position:absolute;bottom:-50px;right:-50px;z-index:2;opacity:0.12;" width="280" height="280" viewBox="0 0 280 280">
+    <circle cx="140" cy="140" r="128" fill="none" stroke="#080808" stroke-width="1" stroke-dasharray="5 7"/>
+    <circle cx="140" cy="140" r="84"  fill="none" stroke="#080808" stroke-width="1" stroke-dasharray="3 8"/>
+    <circle cx="140" cy="140" r="40"  fill="none" stroke="#080808" stroke-width="1"/>
+    <circle cx="140" cy="12"  r="8"   fill="#080808"/>
+    <circle cx="224" cy="196" r="5"   fill="#080808"/>
+    <circle cx="56"  cy="204" r="4"   fill="#080808"/>
+  </svg>
+
+  <div style="position:absolute;top:0;left:0;right:0;height:4px;background:#080808;z-index:5;"></div>
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="tag">SEO vs AEO/GEO // 08 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:36px 28px 24px;display:flex;flex-direction:column;justify-content:space-between;">
+    <div>
+      <div class="eyebrow" style="margin-bottom:14px;">The Solution // HELIO</div>
+      <div class="hl" style="font-size:40px;margin-bottom:16px;">
+        One agent.<br>All three engines.<br><span class="acc">Zero manual work.</span>
+      </div>
+      <div class="body" style="margin-bottom:20px;">
+        HELIO autonomously runs SEO, AEO, and GEO<br>
+        in a single live loop — detecting gaps, deploying<br>
+        fixes, and compounding your visibility 24/7.
+      </div>
+    </div>
+    <div>
+      <div class="lst" style="margin-bottom:22px;">
+        <div class="li"><span class="li-mk">→</span><span>Technical SEO — live, continuous</span></div>
+        <div class="li"><span class="li-mk">→</span><span>AEO citations — structured + deployed</span></div>
+        <div class="li"><span class="li-mk">→</span><span>GEO coverage — AI overviews + summaries</span></div>
+      </div>
+      <button class="cta">Join Waitlist → helio.bot</button>
+    </div>
+  </div>
+
+  <div class="bot-bar"><div class="bot-url">helio.bot</div><div class="dots" id="d7"></div></div>
+</div>
+
+<!-- NAV -->
+<div class="nav-row">
+  <button class="nbtn" id="prev" onclick="go(-1)" disabled>← PREV</button>
+  <button class="dbtn" id="dlb" onclick="copySlide()">⬇ SAVE JPG</button>
+  <button class="nbtn" id="next" onclick="go(1)">NEXT →</button>
+</div>
+
+<script>
+  const N=8;let cur=0;
+  function buildDots(i){
+    for(let s=0;s<N;s++){
+      const c=document.getElementById('d'+s);
+      if(!c)continue;c.innerHTML='';
+      for(let j=0;j<N;j++){const d=document.createElement('div');d.className='dot'+(j===i?' on':'');c.appendChild(d);}
+    }
+  }
+  function go(d){
+    document.getElementById('s'+cur).classList.remove('active');
+    cur=Math.max(0,Math.min(N-1,cur+d));
+    document.getElementById('s'+cur).classList.add('active');
+    document.getElementById('counter').textContent=String(cur+1).padStart(2,'0')+' / '+String(N).padStart(2,'0');
+    document.getElementById('prev').disabled=cur===0;
+    document.getElementById('next').disabled=cur===N-1;
+    buildDots(cur);
+  }
+  function copySlide(){
+    const b=document.getElementById('dlb');
+    b.textContent='📸 SCREENSHOT SLIDE '+(cur+1);
+    setTimeout(()=>{b.textContent='⬇ SAVE JPG';},2500);
+  }
+  buildDots(0);
+</script>
+</body>
+</html>

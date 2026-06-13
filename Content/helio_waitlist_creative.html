@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .canvas {
+    width: 480px;
+    height: 600px;
+    background: #080808;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #1a1a1a;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Grid overlay */
+  .grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(200,255,0,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,255,0,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── TOP BAR ── */
+  .top-bar {
+    height: 52px;
+    flex-shrink: 0;
+    padding: 0 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(200,255,0,0.12);
+    z-index: 10;
+    position: relative;
+  }
+
+  .brand {
+    font-size: 18px;
+    font-weight: 800;
+    color: #C8FF00;
+    letter-spacing: 0.12em;
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    color: rgba(200,255,0,0.7);
+    letter-spacing: 0.15em;
+    font-weight: 500;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    background: #C8FF00;
+    border-radius: 50%;
+    box-shadow: 0 0 6px #C8FF00;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 6px #C8FF00; }
+    50% { opacity: 0.5; box-shadow: 0 0 14px #C8FF00; }
+  }
+
+  /* ── ORBITAL ZONE ── */
+  .orbital-zone {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+  }
+
+  .glow-outer {
+    position: absolute;
+    width: 280px;
+    height: 280px;
+    background: radial-gradient(circle, rgba(200,255,0,0.07) 0%, transparent 65%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .glow-core {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle, rgba(200,255,0,0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .orbital-svg {
+    width: 280px;
+    height: 280px;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* ── BOTTOM CONTENT ── */
+  .bottom-content {
+    flex-shrink: 0;
+    padding: 18px 28px 26px;
+    border-top: 1px solid rgba(200,255,0,0.08);
+    z-index: 10;
+    position: relative;
+    background: linear-gradient(to top, rgba(8,8,8,1) 80%, rgba(8,8,8,0.0) 100%);
+  }
+
+  .tag-line {
+    font-size: 8px;
+    font-weight: 500;
+    color: rgba(200,255,0,0.5);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .headline {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.22;
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+
+  .headline span { color: #C8FF00; }
+
+  .sub {
+    font-size: 9.5px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.35);
+    line-height: 1.65;
+    margin-bottom: 16px;
+    letter-spacing: 0.02em;
+  }
+
+  .terminal {
+    background: rgba(200,255,0,0.05);
+    border: 1px solid rgba(200,255,0,0.14);
+    border-radius: 3px;
+    padding: 9px 13px;
+    font-size: 9.5px;
+    color: rgba(200,255,0,0.65);
+    letter-spacing: 0.05em;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .terminal .prompt { color: rgba(200,255,0,0.35); }
+
+  .cursor {
+    display: inline-block;
+    width: 6px;
+    height: 11px;
+    background: #C8FF00;
+    animation: blink 1s step-end infinite;
+    vertical-align: middle;
+    margin-left: 2px;
+    flex-shrink: 0;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  .cta-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .cta-btn {
+    background: #C8FF00;
+    color: #080808;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 11px 20px;
+    border: none;
+    cursor: pointer;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .cta-url {
+    font-size: 10px;
+    color: rgba(200,255,0,0.4);
+    letter-spacing: 0.1em;
+  }
+
+  /* ── ORBIT ANIMATIONS ── */
+  @keyframes orbit1 {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes orbit2 {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(-360deg); }
+  }
+
+  .ring1-group {
+    transform-origin: 140px 140px;
+    animation: orbit1 12s linear infinite;
+  }
+  .ring2-group {
+    transform-origin: 140px 140px;
+    animation: orbit2 7.5s linear infinite;
+  }
+</style>
+</head>
+<body>
+
+<div class="canvas">
+  <div class="grid"></div>
+
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="status">
+      <div class="status-dot"></div>
+      AGENT ONLINE
+    </div>
+  </div>
+
+  <!-- ORBITAL ZONE -->
+  <div class="orbital-zone">
+    <div class="glow-outer"></div>
+    <div class="glow-core"></div>
+
+    <svg class="orbital-svg" viewBox="0 0 280 280" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="glowStrong">
+          <feGaussianBlur stdDeviation="6" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- Static outer ring -->
+      <circle cx="140" cy="140" r="128" fill="none" stroke="rgba(200,255,0,0.1)" stroke-width="1"/>
+
+      <!-- Orbiting ring 1 -->
+      <g class="ring1-group" filter="url(#glow)">
+        <path d="M 140 18 A 122 122 0 1 1 139.99 18"
+              fill="none" stroke="rgba(200,255,0,0.5)" stroke-width="1.5"
+              stroke-dasharray="20 9" stroke-linecap="round"/>
+        <circle cx="140" cy="18" r="7" fill="#C8FF00" opacity="0.92"/>
+      </g>
+
+      <!-- Orbiting ring 2 -->
+      <g class="ring2-group" filter="url(#glow)">
+        <path d="M 140 68 A 72 72 0 1 1 139.99 68"
+              fill="none" stroke="rgba(200,255,0,0.38)" stroke-width="1.5"
+              stroke-dasharray="14 7" stroke-linecap="round"/>
+        <circle cx="140" cy="68" r="6" fill="#C8FF00" opacity="0.78"/>
+      </g>
+
+      <!-- Core -->
+      <circle cx="140" cy="140" r="32" fill="rgba(200,255,0,0.06)" filter="url(#glowStrong)"/>
+      <circle cx="140" cy="140" r="18" fill="#C8FF00" opacity="0.12" filter="url(#glowStrong)"/>
+      <circle cx="140" cy="140" r="9"  fill="#C8FF00" opacity="0.95" filter="url(#glow)"/>
+    </svg>
+  </div>
+
+  <!-- BOTTOM CONTENT — fully separate, never overlaps orbit -->
+  <div class="bottom-content">
+    <div class="tag-line">Early Access // Command Protocol</div>
+    <div class="headline">SEO that runs<br>while you <span>don't.</span></div>
+    <div class="sub">Autonomous agent. Detects. Decides. Deploys.<br>No manual overhead. No sleep mode.</div>
+
+    <div class="terminal">
+      <span class="prompt">$</span>
+      <span>helio agent run --goal outrank</span>
+      <span class="cursor"></span>
+    </div>
+
+    <div class="cta-row">
+      <div class="cta-btn">Join Waitlist</div>
+      <div class="cta-url">helio.bot</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

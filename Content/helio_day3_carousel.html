@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HELIO — Day 03 Carousel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --acid:  #C8FF00;
+  --deep:  #080808;
+  --black: #0A0A0A;
+  --white: #FFFFFF;
+  --off:   rgba(255,255,255,0.38);
+  --dmute: rgba(200,255,0,0.45);
+  --lsub:  rgba(0,0,0,0.52);
+  --font:  'JetBrains Mono', monospace;
+  --W: 480px; --H: 600px;
+}
+body {
+  background:#111; font-family:var(--font);
+  display:flex; flex-direction:column; align-items:center;
+  padding:40px 20px 60px;
+}
+.s-hdr   { color:var(--acid); font-size:9px; font-weight:700; letter-spacing:.22em; text-transform:uppercase; margin-bottom:4px; opacity:.7; }
+.s-title { color:#fff; font-size:22px; font-weight:800; letter-spacing:-.02em; margin-bottom:2px; }
+.s-sub   { color:var(--acid); font-size:8px; letter-spacing:.18em; text-transform:uppercase; opacity:.6; margin-bottom:24px; }
+
+/* ── STAGE ── */
+.stage { width:var(--W); height:var(--H); position:relative; overflow:hidden; border-radius:2px;
+  box-shadow:0 0 0 1px rgba(200,255,0,0.10), 0 40px 100px rgba(0,0,0,0.85); }
+.slide { position:absolute; inset:0; opacity:0; pointer-events:none; transition:opacity .35s ease; }
+.slide.active { opacity:1; pointer-events:auto; }
+
+/* ── TEXTURES ── */
+.gd { position:absolute; inset:0; pointer-events:none;
+  background-image:linear-gradient(rgba(200,255,0,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(200,255,0,0.035) 1px,transparent 1px);
+  background-size:30px 30px; }
+.gl { position:absolute; inset:0; pointer-events:none;
+  background-image:linear-gradient(rgba(0,0,0,0.09) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,0.09) 1px,transparent 1px);
+  background-size:30px 30px; }
+.scl { position:absolute; inset:0; pointer-events:none;
+  background:repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.04) 3px,rgba(0,0,0,0.04) 4px); }
+
+/* ── TOP BAR ── */
+.tb { position:absolute; top:0; left:0; right:0; height:46px; display:flex; justify-content:space-between; align-items:center; padding:0 24px; z-index:10; }
+.tb.dk { border-bottom:1px solid rgba(200,255,0,0.10); }
+.tb.lt { border-bottom:1px solid rgba(0,0,0,0.14); }
+.logo.dk { font-size:14px; font-weight:800; letter-spacing:.16em; color:var(--acid); }
+.logo.lt { font-size:14px; font-weight:800; letter-spacing:.16em; color:var(--deep); }
+.tag.dk  { font-size:7.5px; font-weight:500; letter-spacing:.15em; text-transform:uppercase; color:var(--dmute); }
+.tag.lt  { font-size:7.5px; font-weight:500; letter-spacing:.15em; text-transform:uppercase; color:var(--lsub); }
+
+/* ── BOTTOM BAR ── */
+.bb { position:absolute; bottom:0; left:0; right:0; height:40px; display:flex; justify-content:space-between; align-items:center; padding:0 24px; z-index:10; }
+.bb.dk { border-top:1px solid rgba(200,255,0,0.07); }
+.bb.lt { border-top:1px solid rgba(0,0,0,0.12); }
+.url.dk { font-size:8px; font-weight:500; letter-spacing:.16em; color:rgba(200,255,0,0.35); }
+.url.lt { font-size:8px; font-weight:500; letter-spacing:.16em; color:rgba(0,0,0,0.28); }
+
+/* ── DOTS ── */
+.dots { display:flex; gap:4px; align-items:center; }
+.dot { width:5px; height:5px; border-radius:50%; transition:all .3s; }
+.dot.d-off { background:rgba(200,255,0,0.15); }
+.dot.d-on  { width:14px; border-radius:3px; background:var(--acid); }
+.dot.l-off { background:rgba(0,0,0,0.18); }
+.dot.l-on  { width:14px; border-radius:3px; background:var(--deep); }
+
+/* ── ACCENT BARS ── */
+.hbar-lt { position:absolute; top:46px; left:0; right:0; height:4px; background:var(--deep); }
+.hbar-dk { position:absolute; top:46px; left:0; right:0; height:4px; background:var(--acid); }
+.vbar-l  { position:absolute; top:46px; bottom:40px; left:0; width:4px; background:var(--acid); }
+.vbar-r  { position:absolute; top:46px; bottom:40px; right:0; width:4px; background:var(--deep); }
+
+/* ── GHOST NUMBER ── */
+.gh    { position:absolute; font-size:190px; font-weight:800; letter-spacing:-.05em; pointer-events:none; line-height:1; }
+.gh.dk { color:rgba(200,255,0,0.04); }
+.gh.lt { color:rgba(0,0,0,0.055); }
+
+/* ── CONTENT ZONE ── */
+.cz { position:absolute; top:46px; bottom:40px; left:0; right:0; padding:0 24px;
+  display:flex; flex-direction:column; justify-content:center; align-items:flex-start; }
+
+/* ── EYEBROW ── */
+.ey.dk { font-size:8px; font-weight:600; letter-spacing:.22em; text-transform:uppercase; margin-bottom:10px; color:var(--dmute); }
+.ey.lt { font-size:8px; font-weight:600; letter-spacing:.22em; text-transform:uppercase; margin-bottom:10px; color:var(--lsub); }
+
+/* ── RULE ── */
+.rule.dk { width:40px; height:3px; background:var(--acid); border-radius:2px; margin-bottom:16px; }
+.rule.lt { width:40px; height:3px; background:var(--deep); border-radius:2px; margin-bottom:16px; }
+
+/* ── LARGE HEADLINE ── */
+.lh    { font-size:34px; font-weight:800; letter-spacing:-.02em; line-height:1.02; margin-bottom:12px; text-align:left; }
+.lh.dk { color:var(--white); }
+.lh.lt { color:var(--deep); }
+.lh .acd { color:var(--acid); }
+.lh .acl { text-decoration:underline; text-underline-offset:4px; color:var(--deep); }
+
+/* ── BODY ── */
+.body    { font-size:11px; font-weight:400; letter-spacing:.02em; line-height:1.75; text-align:left; }
+.body.dk { color:rgba(255,255,255,0.55); }
+.body.lt { color:var(--lsub); }
+
+/* ── STAT PILLS ── */
+.pills { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+.pill.dk { padding:10px 13px; border-radius:3px; display:flex; flex-direction:column; gap:3px; background:rgba(200,255,0,0.06); border:1px solid rgba(200,255,0,0.10); }
+.pill.lt { padding:10px 13px; border-radius:3px; display:flex; flex-direction:column; gap:3px; background:rgba(0,0,0,0.07); border:1px solid rgba(0,0,0,0.14); }
+.pn.dk { font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1; color:var(--acid); }
+.pn.lt { font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1; color:var(--deep); }
+.pl.dk { font-size:7px; letter-spacing:.10em; text-transform:uppercase; color:rgba(255,255,255,0.28); margin-top:2px; }
+.pl.lt { font-size:7px; letter-spacing:.10em; text-transform:uppercase; color:rgba(0,0,0,0.40); margin-top:2px; }
+
+/* ── LIST ROWS ── */
+.lrows { margin-top:12px; width:100%; }
+.li    { display:flex; align-items:flex-start; gap:12px; font-size:11px; padding:8px 0; letter-spacing:.02em; line-height:1.6; }
+.li.dk { color:rgba(255,255,255,0.55); border-top:1px solid rgba(200,255,0,0.07); }
+.li.lt { color:var(--lsub); border-top:1px solid rgba(0,0,0,0.10); }
+.li:first-child { border-top:none !important; }
+.ln.dk { font-size:9px; font-weight:700; color:var(--acid); min-width:20px; flex-shrink:0; padding-top:1px; }
+.ln.lt { font-size:9px; font-weight:700; color:var(--deep); min-width:20px; flex-shrink:0; padding-top:1px; }
+
+/* ── DEBT METER ── */
+.debt-meter { width:100%; margin-top:14px; }
+.dm-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.dm-label { font-size:9px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; min-width:90px; }
+.dm-label.dk { color:rgba(255,255,255,0.55); }
+.dm-label.lt { color:var(--lsub); }
+.dm-bar-track { flex:1; height:8px; border-radius:2px; overflow:hidden; }
+.dm-bar-track.dk { background:rgba(200,255,0,0.08); }
+.dm-bar-track.lt { background:rgba(0,0,0,0.10); }
+.dm-bar-fill { height:100%; border-radius:2px; }
+.dm-bar-fill.dk { background:var(--acid); }
+.dm-bar-fill.lt { background:var(--deep); }
+.dm-val { font-size:10px; font-weight:700; min-width:34px; text-align:right; }
+.dm-val.dk { color:var(--acid); }
+.dm-val.lt { color:var(--deep); }
+
+/* ── TIMELINE BARS (Month progression) ── */
+.timeline { margin-top:14px; width:100%; }
+.tl-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+.tl-label { font-size:8px; font-weight:700; letter-spacing:.08em; min-width:54px; }
+.tl-label.dk { color:var(--dmute); }
+.tl-label.lt { color:var(--lsub); }
+.tl-track { flex:1; height:22px; border-radius:2px; overflow:hidden; position:relative; }
+.tl-track.dk { background:rgba(200,255,0,0.06); border:1px solid rgba(200,255,0,0.08); }
+.tl-track.lt { background:rgba(0,0,0,0.05); border:1px solid rgba(0,0,0,0.10); }
+.tl-fill { height:100%; border-radius:2px; display:flex; align-items:center; padding-left:8px; }
+.tl-fill.dk { background:var(--acid); }
+.tl-fill.lt { background:var(--deep); }
+.tl-txt { font-size:8px; font-weight:700; letter-spacing:.06em; white-space:nowrap; }
+.tl-txt.dk { color:var(--deep); }
+.tl-txt.lt { color:var(--acid); }
+
+/* ── CHIP ── */
+.chip.dk { display:inline-block; padding:5px 10px; border-radius:2px; font-size:8px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; margin-right:5px; margin-top:6px; background:rgba(200,255,0,0.08); border:1px solid rgba(200,255,0,0.15); color:var(--acid); }
+.chip.lt { display:inline-block; padding:5px 10px; border-radius:2px; font-size:8px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; margin-right:5px; margin-top:6px; background:rgba(0,0,0,0.07); border:1px solid rgba(0,0,0,0.15); color:var(--deep); }
+
+/* ── TICKER ── */
+.tick-wrap  { position:absolute; bottom:40px; left:0; right:0; height:30px; overflow:hidden; display:flex; align-items:center; z-index:5; }
+.tick-wrap.dk { background:rgba(200,255,0,0.07); border-top:1px solid rgba(200,255,0,0.10); }
+.tick-wrap.lt { background:rgba(0,0,0,0.07); border-top:1px solid rgba(0,0,0,0.10); }
+.tick-inner { display:flex; white-space:nowrap; animation:tck 16s linear infinite; font-size:8px; font-weight:700; letter-spacing:.2em; text-transform:uppercase; }
+.tick-inner.dk { color:var(--acid); }
+.tick-inner.lt { color:var(--deep); }
+@keyframes tck { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+
+/* ── CTA BUTTON ── */
+.cta    { display:inline-block; font-family:var(--font); font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; padding:13px 28px; border-radius:2px; margin-top:18px; }
+.cta.dk { background:var(--acid); color:var(--deep); }
+.cta.lt { background:var(--deep); color:var(--acid); }
+
+/* ── STATUS DOT ── */
+.sdot    { width:6px; height:6px; border-radius:50%; display:inline-block; margin-right:6px; vertical-align:middle; flex-shrink:0; }
+.sdot.dk { background:var(--acid); box-shadow:0 0 6px var(--acid); animation:pulse 2s ease-in-out infinite; }
+.sdot.lt { background:var(--deep); }
+@keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 6px var(--acid)} 50%{opacity:.4;box-shadow:0 0 14px var(--acid)} }
+
+/* ── SPLIT HALVES ── */
+.sp-l { position:absolute; top:46px; bottom:40px; left:0; width:50%; display:flex; flex-direction:column; justify-content:center; padding:20px 14px 20px 24px; }
+.sp-r { position:absolute; top:46px; bottom:40px; right:0; width:50%; display:flex; flex-direction:column; justify-content:center; padding:20px 24px 20px 14px; }
+.sp-div.dk { position:absolute; top:46px; bottom:40px; left:50%; width:1px; background:rgba(200,255,0,0.20); z-index:5; }
+.sp-div.lt { position:absolute; top:46px; bottom:40px; left:50%; width:1px; background:rgba(0,0,0,0.15); z-index:5; }
+.sp-lb   { font-size:7px; font-weight:700; letter-spacing:.18em; text-transform:uppercase; margin-bottom:8px; }
+.sp-lb.d { color:var(--dmute); }
+.sp-lb.l { color:var(--lsub); }
+.sp-hl   { font-size:19px; font-weight:800; letter-spacing:-.02em; line-height:1.05; text-align:left; }
+.sp-hl.d { color:var(--white); }
+.sp-hl.l { color:var(--deep); }
+.sp-bd   { font-size:9.5px; line-height:1.65; margin-top:8px; text-align:left; }
+.sp-bd.d { color:var(--off); }
+.sp-bd.l { color:var(--lsub); }
+
+.swipe    { position:absolute; bottom:48px; right:24px; font-size:8px; letter-spacing:.14em; text-transform:uppercase; }
+.swipe.dk { color:rgba(200,255,0,0.28); }
+.swipe.lt { color:rgba(0,0,0,0.22); }
+
+/* ── NAV ── */
+.nav-row { display:flex; gap:5px; margin-top:20px; flex-wrap:wrap; justify-content:center; max-width:320px; }
+.pip { width:22px; height:3px; border-radius:2px; background:#2a2a2a; cursor:pointer; transition:background .25s; }
+.pip.active { background:var(--acid); }
+.controls { display:flex; align-items:center; gap:14px; margin-top:14px; }
+.cbtn { width:38px; height:38px; border-radius:2px; background:#1c1c1c; border:1px solid #2a2a2a; color:#aaa; cursor:pointer; font-family:var(--font); font-size:16px; display:flex; align-items:center; justify-content:center; transition:all .2s; }
+.cbtn:hover { background:var(--acid); color:var(--deep); border-color:var(--acid); }
+.cinfo { font-family:var(--font); font-size:10px; letter-spacing:.12em; color:#444; min-width:52px; text-align:center; }
+.hint  { font-family:var(--font); font-size:8px; letter-spacing:.14em; color:#333; text-transform:uppercase; margin-top:10px; }
+</style>
+</head>
+<body>
+
+<div class="s-hdr">HELIO · Carousel Studio</div>
+<div class="s-title">DAY 03 — URGENCY PILLAR</div>
+<div class="s-sub">SEO Compound Debt // 10 Slides · Dark → Light → Dark → Light → ···</div>
+
+<div class="nav-row" id="nav"></div>
+
+<div class="stage">
+
+  <!-- ════════════════════════════════════
+       S1 — COVER · DARK
+       Full #080808 BG. Ghost "DEBT" word texture.
+       Orbital rings top-right. Massive left-aligned
+       headline vertically centered.
+  ════════════════════════════════════ -->
+  <div class="slide active" id="s0">
+    <div style="position:absolute;inset:0;background:var(--deep)"></div>
+    <div class="gd"></div>
+    <div class="scl"></div>
+
+    <!-- Ghost word texture -->
+    <div style="position:absolute;inset:0;overflow:hidden;pointer-events:none">
+      <div style="position:absolute;top:16px;left:-8px;font-size:148px;font-weight:800;letter-spacing:-.04em;color:rgba(200,255,0,0.04);line-height:1;white-space:nowrap">DEBT</div>
+      <div style="position:absolute;top:154px;left:-8px;font-size:148px;font-weight:800;letter-spacing:-.04em;color:rgba(200,255,0,0.028);line-height:1;white-space:nowrap">CLOCK</div>
+    </div>
+
+    <!-- Orbital rings — top right -->
+    <svg style="position:absolute;right:-30px;top:20px;pointer-events:none;opacity:.18" width="220" height="220" viewBox="0 0 220 220">
+      <circle cx="110" cy="110" r="100" fill="none" stroke="#C8FF00" stroke-width="1" stroke-dasharray="6 6"/>
+      <circle cx="110" cy="110" r="65"  fill="none" stroke="#C8FF00" stroke-width="1" stroke-dasharray="4 8"/>
+      <circle cx="110" cy="110" r="30"  fill="none" stroke="#C8FF00" stroke-width="1"/>
+      <circle cx="110" cy="10"  r="6"   fill="#C8FF00"/>
+      <circle cx="175" cy="155" r="5"   fill="#C8FF00"/>
+      <circle cx="50"  cy="162" r="4"   fill="#C8FF00"/>
+    </svg>
+
+    <!-- Top accent bar -->
+    <div class="hbar-dk"></div>
+
+    <!-- Corner accent block -->
+    <div style="position:absolute;top:50px;right:0;width:56px;height:56px;background:rgba(200,255,0,0.06);pointer-events:none"></div>
+
+    <!-- TOP BAR -->
+    <div class="tb dk" style="z-index:20">
+      <span class="logo dk">HELIO</span>
+      <span class="tag dk">URGENCY SERIES // 03 OF 10</span>
+    </div>
+
+    <!-- HEADLINE — left-aligned, vertically centered in full slide body -->
+    <div style="position:absolute;top:46px;bottom:40px;left:0;right:0;padding:0 24px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;z-index:5">
+      <div style="font-size:8px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--dmute);margin-bottom:14px;display:flex;align-items:center;gap:8px">
+        <span class="sdot dk"></span>DEBT CLOCK ACTIVE // SEO DEBT ACCUMULATING
+      </div>
+      <div class="rule dk"></div>
+      <div style="font-size:68px;font-weight:800;letter-spacing:-.04em;line-height:.93;color:var(--white);text-align:left">
+        YOUR<br>SEO<br><span style="color:var(--acid)">DEBT</span><br>IS GROW<span style="text-decoration:underline;text-underline-offset:6px;color:var(--acid)">ING.</span>
+      </div>
+      <div style="margin-top:14px;font-size:16px;font-weight:700;letter-spacing:-.01em;color:rgba(255,255,255,0.45);text-align:left">
+        AND YOU DON'T EVEN KNOW IT YET.
+      </div>
+      <div style="margin-top:10px;font-size:11px;font-weight:400;letter-spacing:.02em;line-height:1.68;color:rgba(255,255,255,0.45);max-width:360px;text-align:left">
+        Every week you delay fixing technical SEO issues, the damage compounds — silently, invisibly, and expensively.
+      </div>
+    </div>
+
+    <div class="bb dk">
+      <span class="url dk">helio.bot</span>
+      <div class="dots" id="pd0"></div>
+    </div>
+  </div>
+
+
+  <!-- ════════════════════════════════════
+       S2 — WHAT IS SEO COMPOUND DEBT · LIGHT
+       Top accent stripe + definition
+  ════════════════════════════════════ -->
+  <div class="slide" id="s1">
+    <div style="position:absolute;inset:0;background:var(--acid)"></div>
+    <div class="gl"></div>
+    <div class="hbar-lt"></div>
+    <div class="gh lt" style="bottom:-20px;right:-10px">01</div>
+
+    <div class="tb lt">
+      <span class="logo lt">HELIO</span>
+      <span class="tag lt">SEO COMPOUND DEBT // DEFINED</span>
+    </div>
+
+    <div class="cz">
+      <div class="ey lt">The Core Problem</div>
+      <div class="lh lt" style="font-size:30px">
+        UNTREATED SEO<br>ISSUES <span class="acl">COMPOUND</span><br>LIKE INTEREST.
+      </div>
+      <div class="body lt" style="max-width:390px;margin-top:8px">
+        SEO compound debt is what happens when technical issues — crawl errors, broken schema, slow pages, missing links — are left unfixed. Each one silently erodes your rankings. Combined, they multiply each other's damage every single month.
+      </div>
+      <div class="body lt" style="max-width:390px;margin-top:10px">
+        Just like financial debt, the longer you wait, the harder and more expensive it becomes to recover. There's no "reset button."
+      </div>
+      <div style="margin-top:14px">
+        <span class="chip lt">Crawl Errors</span>
+        <span class="chip lt">Broken Schema</span>
+        <span class="chip lt">Slow TTFB</span>
+        <span class="chip lt">Missing Links</span>
+      </div>
+    </div>
+
+    <div class="bb lt">
+      <span class="url lt">helio.bot</span>
+      <div class="dots" id="pd1"></div>
+    </div>
+    <div class="swipe lt">Swipe ›</div>
+  </div>
+
+
+  <!-- ════════════════════════════════════
+       S3 — CRAWL ERRORS UNTOUCHED · DARK
+       Left accent bar + debt meter bars
+  ════════════════════════════════════ -->
+  <div class="slide" id="s2">
+    <div style="position:absolute;inset:0;background:var(--deep)"></div>
+    <div class="gd"></div>
+    <div class="scl"></div>
+    <div class="vbar-l"></div>
+    <div class="gh dk" style="bottom:-20px;right:-10px">02</div>
+
+    <div class="tb dk">
+      <span class="logo dk">HELIO</span>
+      <span class="tag dk">DEBT LAYER 01 // CRAWL ERRORS</span>
+    </div>
+
+    <div class="cz" style="padding-left:32px">
+      <div class="ey dk">The Silent Killer</div>
+      <div class="lh dk" style="font-size:30px">
+        CRAWL ERRORS:<br>GOOGLE STOPS<br>SEEING <span class="acd">YOUR PAGES.</span>
+      </div>
+      <div class="body dk" style="max-width:380px;margin-top:8px">
+        Every crawl error is a page Google can't index — a page that earns zero traffic. Left unfixed, errors multiply as you add new pages and update old ones.
+      </div>
+
+      <!-- Debt meter — damage escalation -->
+      <div class="debt-meter" style="margin-top:16px">
+        <div style="font-size:7.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dmute);margin-bottom:10px">Damage Level Over Time</div>
+        <div class="dm-row">
+          <div class="dm-label dk">Month 1</div>
+          <div class="dm-bar-track dk"><div class="dm-bar-fill dk" style="width:18%"></div></div>
+          <div class="dm-val dk">Low</div>
+        </div>
+        <div class="dm-row">
+          <div class="dm-label dk">Month 2</div>
+          <div class="dm-bar-track dk"><div class="dm-bar-fill dk" style="width:34%"></div></div>
+          <div class="dm-val dk">Mild</div>
+        </div>
+        <div class="dm-row">
+          <div class="dm-label dk">Month 3</div>
+          <div class="dm-bar-track dk"><div class="dm-bar-fill dk" style="width:55%"></div></div>
+          <div class="dm-val dk">Serious</div>
+        </div>
+        <div class="dm-row">
+          <div class="dm-label dk">Month 6</div>
+          <div class="dm-bar-track dk"><div class="dm-bar-fill dk" style="width:88%"></div></div>
+          <div class="dm-val dk">Critical</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bb dk">
+      <span class="url dk">helio.bot</span>
+      <div class="dots" id="pd2"></div>
+    </div>
+    <div class="swipe dk">Swipe ›</div>
+  </div>
+
+
+  <!-- ════════════════════════════════════
+       S4 — MISSED KEYWORDS = LOST TRAFFIC · LIGHT
+       Ghost number + stat pills
+  ════════════════════════════════════ -->
+  <div class="slide" id="s3">
+    <div style="position:absolute;inset:0;background:var(--acid)"></div>
+    <div class="gl"></div>
+    <div class="gh lt" style="bottom:-20px;right:-10px">03</div>
+
+    <div class="tb lt">
+      <span class="logo lt">HELIO</span>
+      <span class="tag lt">DEBT LAYER 02 // KEYWORD GAPS</span>
+    </div>
+
+    <div class="cz">
+      <div class="ey lt">Every Miss Compounds</div>
+      <div class="lh lt" style="font-size:30px">
+        MISSED KEYWORDS<br>= TRAFFIC YOUR<br><span class="acl">RIVAL OWNS.</span>
+      </div>
+      <div class="body lt" style="max-width:390px;margin-top:8px">
+        Every keyword gap is a door you left open for a competitor. While you're unranked, they're building domain authority, earning backlinks, and accumulating traffic momentum that takes months to reverse.
+      </div>
+      <div class="pills">
+        <div class="pill lt"><div class="pn lt">67%</div><div class="pl lt">of clicks go to the top 5 results</div></div>
+        <div class="pill lt"><div class="pn lt">3–6</div><div class="pl lt">months to recover a lost keyword ranking</div></div>
+        <div class="pill lt"><div class="pn lt">10×</div><div class="pl lt">harder to outrank an established page</div></div>
+      </div>
+    </div>
+
+    <div class="bb lt">
+      <span class="url lt">helio.bot</span>
+      <div class="dots" id="pd3"></div>
+    </div>
+    <div class="swipe lt">Swipe ›</div>
+  </div>
+
+
+  <!-- ════════════════════════════════════
+       S5 — BROKEN SCHEMA DAMAGE · DARK
+       Right accent bar + list rows
+  ════════════════════════════════════ -->
+  <div class="slide" id="s4">
+    <div style="position:absolute;inset:0;background:var(--black)"></div>
+    <div class="gd"></div>
+    <div class="scl"></div>
+    <div class="vbar-r"></div>
+    <div class="gh dk" style="bottom:-20px;left:-10px">04</div>
+
+    <div class="tb dk">
+      <span class="logo dk">HELIO</span>
+      <span class="tag dk">DEBT LAYER 03 // BROKEN SCHEMA</span>
+    </div>
+
+    <div class="cz" style="padding-right:32px">
+      <div class="ey dk">The Invisible Revenue Leak</div>
+      <div class="lh dk" style="font-size:29px">
+        NO SCHEMA =<br>NO RICH RESULTS =<br><span class="acd">FEWER CLICKS.</span>
+      </div>
+      <div class="body dk" style="max-width:390px;margin-top:8px">
+        Schema markup drives star ratings, FAQ dropdowns, product prices, and event dates in search results. Without it, your listing looks bare next to competitors — even if you rank higher.
+      </div>
+      <div class="lrows">
+        <div class="li dk">
+          <span class="ln dk">↓</span>
+          <span>Missing Product schema → no price/rating in SERP → lower click-through rate</span>
+        </div>
+        <div class="li dk">
+          <span class="ln dk">↓</span>
+          <span>Missing FAQ schema → competitor's answer box appears instead of yours</span>
+        </div>
+        <div class="li dk">
+          <span class="ln dk">↓</span>
+          <span>Missing Article schema → no date/author shown → users trust it less</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bb dk">
+      <span class="url dk">helio.bot</span>
+      <div class="dots" id="pd4"></div>
+    </div>
+    <div class="swipe dk">Swipe ›</div>
+  </div>
+
+
+  <!-- ════════════════════════════════════
+       S6 — INTERNAL LINK EROSION · LIGHT
+       Top accent + list rows
+  ════════════════════════════════════ -->
+  <div class="slide" id="s5">
+    <div style="position:absolute;inset:0;background:var(--acid)"></div>
+    <div class="gl"></div>
+    <div class="hbar-lt"></div>
+    <div class="gh lt" style="bottom:-20px;right:-10px">05</div>
+
+    <div class="tb lt">
+      <span class="logo lt">HELIO</span>
+      <span class="tag lt">DEBT LAYER 04 // INTERNAL LINKS</span>
+    </div>
+
+    <div class="cz">
+      <div class="ey lt">The PageRank Drain</div>
+      <div class="lh lt" style="font-size:29px">
+        BROKEN INTERNAL<br>LINKS <span class="acl">DRAIN</span><br>YOUR AUTHORITY.
+      </div>
+      <div class="body lt" style="max-width:390px;margin-top:8px">
+        Internal links pass PageRank — authority — between your pages. Orphaned pages, broken links, and shallow link depth means your strongest pages aren't powering your weaker ones.
+      </div>
+      <div class="lrows">
+        <div class="li lt">
+          <span class="ln lt">↓</span>
+          <span><strong style="color:var(--deep);font-weight:700">Orphaned pages</strong> receive zero authority flow — invisible to Google regardless of quality</span>
+        </div>
+        <div class="li lt">
+          <span class="ln lt">↓</span>
+          <span><strong style="color:var(--deep);font-weight:700">Broken links</strong> waste crawl budget and create dead-ends that frustrate both users and bots</span>
+        </div>
+        <div class="li lt">
+          <span class="ln lt">↓</span>
+          <span><strong style="color:var(--deep);font-weight:700">Shallow depth</strong> means key pages are buried 4+ clicks from the homepage — undiscoverable</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bb lt">
+      <span class="url lt">helio.bot</span>
+      <div class="dots" id="pd5"></div>
+    </div>
+    <div class="swipe lt">Swipe ›</div>
+  </div>
+
+
+  <!-- ════════════════════════════════════
+       S7 — HOW FAST THE GAP WIDENS · DARK
+       Timeline progression bars — months 1–6
+  ════════════════════════════════════ -->
+  <div class="slide" id="s6">
+    <div style="position:absolute;inset:0;background:var(--deep)"></div>
+    <div class="gd"></div>
+    <div class="scl"></div>
+    <div class="gh dk" style="bottom:-20px;right:-10px">06</div>
+
+    <!-- Scrolling ticker -->
+    <div class="tick-wrap dk" style="bottom:40px">
+      <div class="tick-inner dk">DEBT COMPOUNDING · RANKINGS SLIPPING · COMPETITOR GAINING · CRAWL ERRORS MULTIPLYING · SCHEMA MISSING · LINKS BROKEN · &nbsp;&nbsp;DEBT COMPOUNDING · RANKINGS SLIPPING · COMPETITOR GAINING · CRAWL ERRORS MULTIPLYING · SCHEMA MISSING · LINKS BROKEN · &nbsp;&nbsp;</div>
+    </div>
+
+    <div class="tb dk">
+      <span class="logo dk">HELIO</span>
+      <span class="tag dk">THE COMPOUND CURVE // MONTHS 1–6</span>
+    </div>
+
+    <div class="cz" style="bottom:70px">
+      <div class="ey dk">How Fast the Gap Widens</div>
+      <div class="lh dk" style="font-size:27px">
+        MONTH 1 IS<br>MANAGEABLE.<br>MONTH 6 IS <span class="acd">PAINFUL.</span>
+      </div>
+
+      <!-- Timeline progression -->
+      <div class="timeline">
+        <div class="tl-row">
+          <div class="tl-label dk">Month 1</div>
+          <div class="tl-track dk" style="flex:1">
+            <div class="tl-fill dk" style="width:14%"><span class="tl-txt dk">Minor issues</span></div>
+          </div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-label dk">Month 2</div>
+          <div class="tl-track dk">
+            <div class="tl-fill dk" style="width:28%"><span class="tl-txt dk">Errors pile up</span></div>
+          </div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-label dk">Month 3</div>
+          <div class="tl-track dk">
+            <div class="tl-fill dk" style="width:46%"><span class="tl-txt dk">Rankings drop</span></div>
+          </div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-label dk">Month 4</div>
+          <div class="tl-track dk">
+            <div class="tl-fill dk" style="width:62%"><span class="tl-txt dk">Traffic falling</span></div>
+          </div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-label dk">Month 5</div>
+          <div class="tl-track dk">
+            <div class="tl-fill dk" style="width:78%"><span class="tl-txt dk">Competitor leads</span></div>
+          </div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-label dk">Month 6</div>
+          <div class="tl-track dk">
+            <div class="tl-fill dk" style="width:96%"><span class="tl-txt dk">Critical debt</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bb dk" style="bottom:30px">
+      <span class="url dk">helio.bot</span>
+      <div class="dots" id="pd6"></div>
+    </div>
+    <div class="swipe dk">Swipe ›</div>
+  </div>
+
+
+  <!-- ════════════════════════════════════
+       S8 — THE REAL COST IN NUMBERS · LIGHT
+       Split halves — cost of waiting vs fixing now
+  ════════════════════════════════════ -->
+  <div class="slide" id="s7">
+    <div style="position:absolute;inset:0;background:var(--acid)"></div>
+    <div class="gl"></div>
+
+    <div class="tb lt" style="z-index:10">
+      <span class="logo lt">HELIO</span>
+      <span class="tag lt">THE REAL COST // WAIT VS ACT</span>
+    </div>
+
+    <!-- Left — dark half (cost of waiting) -->
+    <div class="sp-l" style="background:var(--deep)">
+      <div class="gd" style="opacity:.5"></div>
+      <div class="sp-lb d">If You Wait 6 Months</div>
+      <div class="sp-hl d" style="color:var(--acid)">3–6 MO<br>RECOVERY</div>
+      <div class="sp-bd d">Crawl debt. Keyword gaps closed by rivals. Schema missing from hundreds of pages. A full recovery takes longer than the debt took to build.</div>
+    </div>
+    <div class="sp-div lt"></div>
+    <!-- Right — lime half (act now) -->
+    <div class="sp-r" style="background:var(--acid)">
+      <div class="sp-lb l">If You Fix It Now</div>
+      <div class="sp-hl l">CLEAN<br>IN WEEKS,<br>NOT MONTHS</div>
+      <div class="sp-bd l">Automated detection + fixing means issues get resolved in hours, not quarterly audits. No debt accumulates.</div>
+    </div>
+
+    <div class="bb lt" style="z-index:10">
+      <span class="url lt">helio.bot</span>
+      <div class="dots" id="pd7"></div>
+    </div>
+    <div class="swipe lt">Swipe ›</div>
+  </div>
+
+
+  <!-- ════════════════════════════════════
+       S9 — HOW TO STOP THE DEBT · DARK
+       Numbered action list
+  ════════════════════════════════════ -->
+  <div class="slide" id="s8">
+    <div style="position:absolute;inset:0;background:var(--deep)"></div>
+    <div class="gd"></div>
+    <div class="scl"></div>
+    <div class="vbar-l"></div>
+    <div class="gh dk" style="bottom:-20px;right:-10px">07</div>
+
+    <div class="tb dk">
+      <span class="logo dk">HELIO</span>
+      <span class="tag dk">DEBT PAYOFF PROTOCOL // 4 STEPS</span>
+    </div>
+
+    <div class="cz" style="padding-left:32px">
+      <div class="ey dk">Stop the Bleeding First</div>
+      <div class="lh dk" style="font-size:27px">
+        4 STEPS TO<br>CLEAR YOUR <span class="acd">SEO</span><br>DEBT TODAY.
+      </div>
+      <div class="lrows">
+        <div class="li dk">
+          <span class="ln dk">01</span>
+          <span><strong style="color:#fff;font-weight:700">Run a full crawl audit</strong> — identify every broken link, redirect chain, crawl error, and orphaned page on your site right now</span>
+        </div>
+        <div class="li dk">
+          <span class="ln dk">02</span>
+          <span><strong style="color:#fff;font-weight:700">Fix canonical tags and redirects</strong> — these silently split your authority across duplicate URLs and waste crawl budget daily</span>
+        </div>
+        <div class="li dk">
+          <span class="ln dk">03</span>
+          <span><strong style="color:#fff;font-weight:700">Implement schema on top pages</strong> — Product, FAQ, Article schema on your 10 highest-traffic pages gives immediate SERP visibility lift</span>
+        </div>
+        <div class="li dk">
+          <span class="ln dk">04</span>
+          <span><strong style="color:#fff;font-weight:700">Automate the monitoring</strong> — manual monthly audits aren't enough. Debt accumulates daily and needs daily detection</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bb dk">
+      <span class="url dk">helio.bot</span>
+      <div class="dots" id="pd8"></div>
+    </div>
+    <div class="swipe dk">Swipe ›</div>
+  </div>
+
+
+  <!-- ════════════════════════════════════
+       S10 — CTA · LIGHT (LIME)
+       Orbital deco + waitlist CTA
+  ════════════════════════════════════ -->
+  <div class="slide" id="s9">
+    <div style="position:absolute;inset:0;background:var(--acid)"></div>
+    <div class="gl"></div>
+    <div class="hbar-lt"></div>
+
+    <!-- Ghost "HELIO" word background -->
+    <div style="position:absolute;bottom:50px;left:-10px;font-size:150px;font-weight:800;letter-spacing:-.04em;color:rgba(0,0,0,0.04);pointer-events:none;line-height:1;white-space:nowrap">HELIO</div>
+
+    <!-- Orbital rings — bottom right -->
+    <svg style="position:absolute;right:-30px;bottom:38px;pointer-events:none;opacity:.12" width="220" height="220" viewBox="0 0 220 220">
+      <circle cx="110" cy="110" r="100" fill="none" stroke="#080808" stroke-width="1" stroke-dasharray="6 6"/>
+      <circle cx="110" cy="110" r="65"  fill="none" stroke="#080808" stroke-width="1" stroke-dasharray="4 8"/>
+      <circle cx="110" cy="110" r="30"  fill="none" stroke="#080808" stroke-width="1"/>
+      <circle cx="110" cy="10"  r="6"   fill="#080808"/>
+      <circle cx="175" cy="155" r="5"   fill="#080808"/>
+      <circle cx="50"  cy="162" r="4"   fill="#080808"/>
+    </svg>
+
+    <div class="tb lt">
+      <span class="logo lt">HELIO</span>
+      <span class="tag lt">MISSION CONTROL // HELIO</span>
+    </div>
+
+    <div style="position:absolute;top:56px;left:0;right:0;bottom:40px;padding:0 24px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;z-index:5">
+      <div style="font-size:8px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--lsub);margin-bottom:14px;display:flex;align-items:center;gap:8px">
+        <span class="sdot lt"></span>HELIO DETECTS + FIXES SEO DEBT 24/7
+      </div>
+      <div class="rule lt"></div>
+      <div style="font-size:44px;font-weight:800;letter-spacing:-.04em;line-height:.95;color:var(--deep);text-align:left">
+        STOP YOUR<br>SEO DEBT<br>BEFORE IT<br><span style="text-decoration:underline;text-underline-offset:5px">COMPOUNDS.</span>
+      </div>
+      <div style="margin-top:12px;font-size:11px;font-weight:400;letter-spacing:.02em;line-height:1.72;color:var(--lsub);max-width:370px;text-align:left">
+        HELIO runs continuous crawl audits, auto-fixes broken schemas and canonicals, fills keyword gaps, and monitors your site for new debt — 24 hours a day, 7 days a week. No more quarterly surprises.
+      </div>
+
+      <!-- WAITLIST CTA -->
+      <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;align-items:flex-start">
+        <div class="cta lt">→ Join the HELIO Waitlist</div>
+        <div style="font-size:8px;letter-spacing:.14em;color:rgba(0,0,0,0.32);text-transform:uppercase">helio.bot · Early access now open</div>
+      </div>
+
+      <div style="margin-top:14px;font-size:8px;letter-spacing:.14em;color:rgba(0,0,0,0.22);text-transform:uppercase">♥ Like · 🔖 Save · Share with your team</div>
+    </div>
+
+    <div class="bb lt">
+      <span class="url lt">helio.bot</span>
+      <div class="dots" id="pd9"></div>
+    </div>
+  </div>
+
+</div><!-- /stage -->
+
+<div class="controls">
+  <button class="cbtn" onclick="prev()">‹</button>
+  <div class="cinfo" id="ci">01 / 10</div>
+  <button class="cbtn" onclick="next()">›</button>
+</div>
+<div class="hint">← → arrow keys · click pips to jump</div>
+
+<script>
+let cur = 0;
+const N = 10;
+// Dark slides: 0,2,4,6,8 (even) — Light slides: 1,3,5,7,9 (odd)
+const isLight = i => i % 2 !== 0;
+
+// Build nav pips
+const navRow = document.getElementById('nav');
+for (let i = 0; i < N; i++) {
+  const p = document.createElement('div');
+  p.className = 'pip' + (i === 0 ? ' active' : '');
+  p.onclick = () => go(i);
+  navRow.appendChild(p);
+}
+
+function renderDots() {
+  for (let i = 0; i < N; i++) {
+    const pd = document.getElementById('pd' + i);
+    if (!pd) continue;
+    pd.innerHTML = '';
+    const lt = isLight(i);
+    for (let j = 0; j < N; j++) {
+      const d = document.createElement('div');
+      d.className = 'dot ' + (j === i ? (lt ? 'l-on' : 'd-on') : (lt ? 'l-off' : 'd-off'));
+      pd.appendChild(d);
+    }
+  }
+}
+
+function go(idx) {
+  document.getElementById('s' + cur).classList.remove('active');
+  document.querySelectorAll('.pip')[cur].classList.remove('active');
+  cur = idx;
+  document.getElementById('s' + cur).classList.add('active');
+  document.querySelectorAll('.pip')[cur].classList.add('active');
+  document.getElementById('ci').textContent =
+    String(cur + 1).padStart(2, '0') + ' / ' + String(N).padStart(2, '0');
+}
+
+function next() { go((cur + 1) % N); }
+function prev() { go((cur - 1 + N) % N); }
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') next();
+  if (e.key === 'ArrowLeft')  prev();
+});
+
+renderDots();
+</script>
+</body>
+</html>

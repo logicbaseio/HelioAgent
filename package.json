@@ -1,0 +1,65 @@
+{
+  "name": "helio-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "helio-code:worker": "node scripts/helio-code-worker.mjs worker",
+    "helio-code:worker:once": "node scripts/helio-code-worker.mjs worker --once",
+    "helio-backlinks:worker": "node scripts/helio-backlink-worker.mjs",
+    "helio-backlinks:worker:once": "node scripts/helio-backlink-worker.mjs --once",
+    "helio-backlinks:parity": "node scripts/backlink-parity-benchmark.mjs",
+    "helio-code:migrate": "node scripts/helio-code-migrate.mjs",
+    "carousel:generate": "node scripts/generate-daily-carousel.mjs",
+    "carousel:studio": "node Content/helio-carousel-studio-server.mjs",
+    "instagram:publish": "node --env-file=.env scripts/instagram-publish-carousel.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .js,.jsx",
+    "test": "vitest run",
+    "deadcode": "knip",
+    "shelllint": "sh -c 'if command -v shellcheck >/dev/null 2>&1; then scripts=$(find . -type f -name \"*.sh\" | tr \"\\n\" \" \"); if [ -n \"$scripts\" ]; then shellcheck $scripts; else echo \"No shell scripts found\"; fi; else echo \"shellcheck not installed\"; fi'"
+  },
+  "dependencies": {
+    "@sparticuz/chromium": "^148.0.0",
+    "jspdf": "^4.2.1",
+    "pg": "^8.20.0",
+    "playwright-core": "^1.60.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "knip": {
+    "entry": [
+      "api/**/*.ts",
+      "api/**/*.mjs",
+      "scripts/**/*.mjs",
+      "Content/**/*.mjs"
+    ],
+    "ignore": [
+      "dist/**",
+      "backups/**",
+      "helio_dashboard.tsx",
+      "vite.config.d.ts",
+      "docs/**",
+      "Content/**/scripts/pipeline.js",
+      "src/server/helio-code/api.mjs"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.9.1",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "eslint": "^10.4.0",
+    "globals": "^17.6.0",
+    "jsdom": "^29.1.1",
+    "knip": "^6.14.0",
+    "playwright": "^1.60.0",
+    "typescript": "^5.8.3",
+    "vite": "^8.0.13",
+    "vitest": "^4.1.6"
+  }
+}

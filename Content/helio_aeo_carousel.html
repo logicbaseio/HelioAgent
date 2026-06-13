@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#111;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    min-height:100vh; font-family:'JetBrains Mono',monospace;
+    gap:16px; padding:24px 0;
+  }
+
+  .meta { font-size:10px; color:rgba(255,255,255,0.25); letter-spacing:0.2em; }
+
+  /* ── SLIDE ── */
+  .slide { width:480px; height:600px; position:relative; overflow:hidden; display:none; flex-shrink:0; }
+  .slide.active { display:block; }
+
+  /* ── THEMES ── */
+  .dark  { background:#080808; }
+  .light { background:#C8FF00; }
+
+  /* ── GRID ── */
+  .grid { position:absolute; inset:0; z-index:0; pointer-events:none; }
+  .dark  .grid { background-image:linear-gradient(rgba(200,255,0,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(200,255,0,0.035) 1px,transparent 1px); background-size:30px 30px; }
+  .light .grid { background-image:linear-gradient(rgba(0,0,0,0.07) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,0.07) 1px,transparent 1px); background-size:30px 30px; }
+
+  /* ── SCAN LINE ── */
+  .scanline { position:absolute; inset:0; z-index:1; pointer-events:none;
+    background:repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 4px); }
+
+  /* ── TOP BAR ── */
+  .top-bar { position:absolute; top:0; left:0; right:0; height:46px; z-index:20;
+    display:flex; justify-content:space-between; align-items:center; padding:0 24px; }
+  .dark  .top-bar { border-bottom:1px solid rgba(200,255,0,0.1); }
+  .light .top-bar { border-bottom:1px solid rgba(0,0,0,0.12); }
+
+  .brand { font-size:14px; font-weight:800; letter-spacing:0.18em; }
+  .dark  .brand { color:#C8FF00; }
+  .light .brand { color:#080808; }
+
+  .tag { font-size:7.5px; letter-spacing:0.18em; font-weight:500; }
+  .dark  .tag { color:rgba(200,255,0,0.4); }
+  .light .tag { color:rgba(0,0,0,0.38); }
+
+  /* ── BOTTOM BAR ── */
+  .bot-bar { position:absolute; bottom:0; left:0; right:0; height:40px; z-index:20;
+    display:flex; justify-content:space-between; align-items:center; padding:0 24px; }
+  .dark  .bot-bar { border-top:1px solid rgba(200,255,0,0.08); }
+  .light .bot-bar { border-top:1px solid rgba(0,0,0,0.1); }
+
+  .bot-url { font-size:8px; letter-spacing:0.16em; font-weight:500; }
+  .dark  .bot-url { color:rgba(200,255,0,0.25); }
+  .light .bot-url { color:rgba(0,0,0,0.28); }
+
+  .dots { display:flex; gap:4px; align-items:center; }
+  .dot  { width:5px; height:5px; border-radius:50%; transition:all 0.3s; }
+  .dark  .dot        { background:rgba(200,255,0,0.15); }
+  .dark  .dot.on     { background:#C8FF00; width:14px; border-radius:3px; }
+  .light .dot        { background:rgba(0,0,0,0.15); }
+  .light .dot.on     { background:#080808; width:14px; border-radius:3px; }
+
+  /* ── CONTENT AREA ── */
+  .content { position:absolute; top:46px; bottom:40px; left:0; right:0; z-index:10; }
+
+  /* ── EYEBROW ── */
+  .eyebrow { font-size:8px; font-weight:600; letter-spacing:0.25em; text-transform:uppercase; }
+  .dark  .eyebrow { color:rgba(200,255,0,0.5); }
+  .light .eyebrow { color:rgba(0,0,0,0.45); }
+
+  /* ── HEADLINE ── */
+  .hl { font-weight:800; line-height:1.08; letter-spacing:-0.03em; }
+  .dark  .hl { color:#fff; }
+  .light .hl { color:#080808; }
+  .dark  .hl .accent { color:#C8FF00; }
+  .light .hl .accent { -webkit-text-stroke:1.5px #080808; color:transparent; }
+
+  /* ── BODY ── */
+  .body { font-size:12px; line-height:1.75; font-weight:400; }
+  .dark  .body { color:rgba(255,255,255,0.38); }
+  .light .body { color:rgba(0,0,0,0.55); }
+
+  /* ── RULE LINE ── */
+  .rule { height:1px; }
+  .dark  .rule { background:rgba(200,255,0,0.12); }
+  .light .rule { background:rgba(0,0,0,0.12); }
+
+  /* ── TERMINAL ── */
+  .term { font-size:10px; letter-spacing:0.04em; display:flex; align-items:center; gap:8px; border-radius:2px; padding:10px 14px; }
+  .dark  .term { background:rgba(200,255,0,0.05); border:1px solid rgba(200,255,0,0.12); color:rgba(200,255,0,0.55); }
+  .light .term { background:rgba(0,0,0,0.07); border:1px solid rgba(0,0,0,0.12); color:rgba(0,0,0,0.48); }
+  .prompt { opacity:0.4; }
+  .cur { display:inline-block; width:6px; height:11px; vertical-align:middle; animation:blink 1s step-end infinite; flex-shrink:0; }
+  .dark  .cur { background:#C8FF00; }
+  .light .cur { background:#080808; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* ── STAT PILL ── */
+  .stat-row { display:flex; gap:10px; flex-wrap:wrap; }
+  .pill { display:flex; flex-direction:column; gap:3px; padding:12px 16px; border-radius:3px; flex:1; min-width:100px; }
+  .dark  .pill { background:rgba(200,255,0,0.06); border:1px solid rgba(200,255,0,0.1); }
+  .light .pill { background:rgba(0,0,0,0.07); border:1px solid rgba(0,0,0,0.1); }
+  .pill-num { font-size:28px; font-weight:800; line-height:1; letter-spacing:-0.03em; }
+  .dark  .pill-num { color:#C8FF00; }
+  .light .pill-num { color:#080808; }
+  .pill-lbl { font-size:8px; letter-spacing:0.1em; font-weight:500; }
+  .dark  .pill-lbl { color:rgba(255,255,255,0.28); }
+  .light .pill-lbl { color:rgba(0,0,0,0.38); }
+
+  /* ── LIST ── */
+  .lst { display:flex; flex-direction:column; }
+  .li  { display:flex; align-items:baseline; gap:12px; font-size:12px; line-height:1.45; padding:9px 0; }
+  .dark  .li  { border-bottom:1px solid rgba(200,255,0,0.07); color:rgba(255,255,255,0.55); }
+  .light .li  { border-bottom:1px solid rgba(0,0,0,0.08); color:rgba(0,0,0,0.62); }
+  .li:last-child { border-bottom:none; }
+  .li-num { font-size:9px; font-weight:700; letter-spacing:0.1em; flex-shrink:0; }
+  .dark  .li-num { color:#C8FF00; }
+  .light .li-num { color:#080808; }
+  strong.w { color:#fff; font-weight:700; }
+  strong.b { color:#080808; font-weight:700; }
+
+  /* ── CTA BUTTON ── */
+  .cta { display:inline-block; padding:14px 28px; font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; border-radius:2px; border:none; cursor:pointer; }
+  .dark  .cta { background:#C8FF00; color:#080808; }
+  .light .cta { background:#080808; color:#C8FF00; }
+
+  /* ── STATUS DOT ── */
+  .status { display:flex; align-items:center; gap:6px; font-size:8px; letter-spacing:0.16em; font-weight:600; }
+  .sdot { width:6px; height:6px; border-radius:50%; animation:pulse 2s ease-in-out infinite; flex-shrink:0; }
+  .dark  .status { color:rgba(200,255,0,0.6); }
+  .dark  .sdot   { background:#C8FF00; box-shadow:0 0 6px #C8FF00; }
+  .light .status { color:rgba(0,0,0,0.5); }
+  .light .sdot   { background:#080808; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── BIG NUMBER BG ── */
+  .bnum { position:absolute; font-size:200px; font-weight:800; line-height:1; letter-spacing:-0.05em; pointer-events:none; z-index:2; }
+  .dark  .bnum { color:rgba(200,255,0,0.04); }
+  .light .bnum { color:rgba(0,0,0,0.05); }
+
+  /* ── DIAGONAL ACCENT ── */
+  .diag { position:absolute; z-index:3; pointer-events:none; }
+
+  /* ── NAV ── */
+  .nav-row { display:flex; gap:10px; }
+  .nbtn { background:rgba(200,255,0,0.07); border:1px solid rgba(200,255,0,0.18); color:#C8FF00; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; letter-spacing:0.1em; padding:9px 22px; cursor:pointer; border-radius:2px; transition:background 0.2s; }
+  .nbtn:hover { background:rgba(200,255,0,0.14); }
+  .nbtn:disabled { opacity:0.2; cursor:default; }
+  .dbtn { background:rgba(200,255,0,0.1); border:1px solid rgba(200,255,0,0.22); color:#C8FF00; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; letter-spacing:0.1em; padding:9px 22px; cursor:pointer; border-radius:2px; }
+  .dbtn:hover { background:rgba(200,255,0,0.18); }
+</style>
+</head>
+<body>
+
+<div class="meta" id="counter">01 / 08</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 1 — DARK — COVER
+══════════════════════════════════════ -->
+<div class="slide dark active" id="s0">
+  <div class="grid"></div><div class="scanline"></div>
+  <!-- big bg number -->
+  <div class="bnum" style="right:-30px;bottom:-60px;">01</div>
+  <!-- diagonal accent bar -->
+  <svg class="diag" style="top:46px;left:0;right:0;width:480px;height:514px;" viewBox="0 0 480 514" preserveAspectRatio="none">
+    <polygon points="0,514 0,340 480,120 480,514" fill="rgba(200,255,0,0.025)"/>
+    <line x1="0" y1="340" x2="480" y2="120" stroke="rgba(200,255,0,0.12)" stroke-width="1"/>
+  </svg>
+  <!-- orbital deco top right -->
+  <svg style="position:absolute;top:50px;right:-30px;z-index:4;opacity:0.18;" width="220" height="220" viewBox="0 0 220 220">
+    <circle cx="110" cy="110" r="100" fill="none" stroke="#C8FF00" stroke-width="1" stroke-dasharray="6 6"/>
+    <circle cx="110" cy="110" r="65"  fill="none" stroke="#C8FF00" stroke-width="1" stroke-dasharray="4 8"/>
+    <circle cx="110" cy="110" r="30"  fill="none" stroke="#C8FF00" stroke-width="1"/>
+    <circle cx="110" cy="10"  r="6"   fill="#C8FF00"/>
+    <circle cx="175" cy="155" r="5"   fill="#C8FF00"/>
+    <circle cx="50"  cy="162" r="4"   fill="#C8FF00"/>
+  </svg>
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="status"><div class="sdot"></div>AGENT ONLINE</div>
+  </div>
+
+  <div class="content" style="display:flex;flex-direction:column;justify-content:flex-end;padding:32px 28px 28px;">
+    <div class="eyebrow" style="margin-bottom:14px;">The Era of LLMs — AEO Series</div>
+    <div class="hl" style="font-size:48px;margin-bottom:20px;">
+      Your brand<br>is <span class="accent">invisible</span><br>to AI.
+    </div>
+    <div class="rule" style="margin-bottom:20px;"></div>
+    <div class="body" style="margin-bottom:24px;">
+      ChatGPT. Perplexity. Gemini. Millions ask AI<br>
+      every day. If you're not cited — you don't exist.
+    </div>
+    <div class="term">
+      <span class="prompt">$</span>
+      <span>helio aeo --scan brand_visibility</span>
+      <span class="cur"></span>
+    </div>
+  </div>
+
+  <div class="bot-bar">
+    <div class="bot-url">helio.bot</div>
+    <div class="dots" id="d0"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 2 — LIGHT — THE SHIFT
+══════════════════════════════════════ -->
+<div class="slide light" id="s1">
+  <div class="grid"></div><div class="scanline"></div>
+  <div class="bnum" style="left:-20px;top:40px;">02</div>
+  <!-- top accent stripe -->
+  <div style="position:absolute;top:46px;left:0;right:0;height:4px;background:#080808;z-index:5;"></div>
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="tag">AEO SERIES // 02 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:36px 28px 24px;">
+    <div class="eyebrow" style="margin-bottom:12px;">The Search Shift</div>
+    <div class="hl" style="font-size:42px;margin-bottom:28px;">
+      People stopped<br>Googling.<br>They started<br><span class="accent">asking.</span>
+    </div>
+    <div class="stat-row">
+      <div class="pill"><div class="pill-num">1B+</div><div class="pill-lbl">ChatGPT queries / month</div></div>
+      <div class="pill"><div class="pill-num">40%</div><div class="pill-lbl">Gen Z use AI over Google</div></div>
+      <div class="pill"><div class="pill-num">3×</div><div class="pill-lbl">AI search growth YoY</div></div>
+    </div>
+  </div>
+
+  <div class="bot-bar">
+    <div class="bot-url">helio.bot</div>
+    <div class="dots" id="d1"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 3 — DARK — WHAT IS AEO
+══════════════════════════════════════ -->
+<div class="slide dark" id="s2">
+  <div class="grid"></div><div class="scanline"></div>
+  <div class="bnum" style="right:-20px;bottom:-50px;">03</div>
+  <!-- left accent bar -->
+  <div style="position:absolute;top:46px;bottom:40px;left:0;width:4px;background:#C8FF00;z-index:5;"></div>
+
+  <div class="top-bar" style="padding-left:28px;">
+    <div class="brand">HELIO</div>
+    <div class="tag">AEO SERIES // 03 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:32px 28px 24px 32px;">
+    <div class="eyebrow" style="margin-bottom:14px;">Definition</div>
+    <div class="hl" style="font-size:46px;margin-bottom:18px;">What is<br><span class="accent">AEO?</span></div>
+    <div class="body" style="margin-bottom:24px;">Answer Engine Optimization. The practice of<br>structuring your brand so AI systems cite <em>you</em> —<br>not your competitor.</div>
+    <div class="rule" style="margin-bottom:20px;"></div>
+    <div class="lst">
+      <div class="li"><span class="li-num">SEO →</span><span>Rank in Google blue links</span></div>
+      <div class="li"><span class="li-num">AEO →</span><span>Become the source AI quotes</span></div>
+      <div class="li"><span class="li-num">GEO →</span><span>Appear in AI-generated overviews</span></div>
+    </div>
+  </div>
+
+  <div class="bot-bar" style="padding-left:28px;">
+    <div class="bot-url">helio.bot</div>
+    <div class="dots" id="d2"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 4 — LIGHT — THE STAKES
+══════════════════════════════════════ -->
+<div class="slide light" id="s3">
+  <div class="grid"></div><div class="scanline"></div>
+  <div class="bnum" style="right:-20px;bottom:-50px;">04</div>
+
+  <!-- full-bleed dark top half -->
+  <div style="position:absolute;top:0;left:0;right:0;height:300px;background:#080808;z-index:2;"></div>
+
+  <div class="top-bar" style="z-index:25;">
+    <div class="brand" style="color:#C8FF00;">HELIO</div>
+    <div class="tag" style="color:rgba(200,255,0,0.45);">AEO SERIES // 04 OF 08</div>
+  </div>
+
+  <div class="content" style="z-index:15;">
+    <!-- top half — dark -->
+    <div style="padding:28px 28px 28px;height:254px;display:flex;flex-direction:column;justify-content:flex-end;">
+      <div class="eyebrow" style="color:rgba(200,255,0,0.5);margin-bottom:12px;">The Stakes</div>
+      <div class="hl" style="font-size:40px;color:#fff;">
+        Brands not in<br>AI answers are<br><span style="color:#C8FF00;">already losing.</span>
+      </div>
+    </div>
+    <!-- bottom half — light -->
+    <div style="padding:24px 28px 0;display:flex;flex-direction:column;gap:0;">
+      <div class="lst">
+        <div class="li"><span class="li-num">→</span><span>AI gives ONE answer. Winner takes all.</span></div>
+        <div class="li"><span class="li-num">→</span><span>No page 2. No second chance.</span></div>
+        <div class="li"><span class="li-num">→</span><span>Brands that act now own this channel.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bot-bar" style="z-index:25;">
+    <div class="bot-url">helio.bot</div>
+    <div class="dots" id="d3"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 5 — DARK — 5 SIGNALS
+══════════════════════════════════════ -->
+<div class="slide dark" id="s4">
+  <div class="grid"></div><div class="scanline"></div>
+  <div class="bnum" style="right:-20px;top:30px;font-size:160px;">05</div>
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="tag">AEO SERIES // 05 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:28px 28px 20px;">
+    <div class="eyebrow" style="margin-bottom:12px;">How It Works</div>
+    <div class="hl" style="font-size:34px;margin-bottom:22px;">5 signals that make<br>AI cite <span class="accent">your brand.</span></div>
+    <div class="lst">
+      <div class="li"><span class="li-num">01</span><span><strong class="w">Entity clarity</strong> — AI must know exactly who you are</span></div>
+      <div class="li"><span class="li-num">02</span><span><strong class="w">Structured answers</strong> — Direct Q&A, not buried paragraphs</span></div>
+      <div class="li"><span class="li-num">03</span><span><strong class="w">Schema markup</strong> — Machine-readable content</span></div>
+      <div class="li"><span class="li-num">04</span><span><strong class="w">Authority signals</strong> — Citations AI models trust</span></div>
+      <div class="li"><span class="li-num">05</span><span><strong class="w">Freshness</strong> — Live, updated content wins</span></div>
+    </div>
+  </div>
+
+  <div class="bot-bar">
+    <div class="bot-url">helio.bot</div>
+    <div class="dots" id="d4"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 6 — LIGHT — SEO vs AEO
+══════════════════════════════════════ -->
+<div class="slide light" id="s5">
+  <div class="grid"></div><div class="scanline"></div>
+  <div class="bnum" style="left:-20px;bottom:-50px;">06</div>
+  <!-- right accent bar -->
+  <div style="position:absolute;top:46px;bottom:40px;right:0;width:4px;background:#080808;z-index:5;"></div>
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="tag">AEO SERIES // 06 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:32px 32px 24px 28px;">
+    <div class="eyebrow" style="margin-bottom:12px;">SEO vs AEO vs GEO</div>
+    <div class="hl" style="font-size:42px;margin-bottom:22px;">
+      It's not<br>either/or.<br>You need<br><span class="accent">all three.</span>
+    </div>
+    <div class="lst">
+      <div class="li"><span class="li-num">SEO</span><span>Google, Bing — blue links, snippets, maps</span></div>
+      <div class="li"><span class="li-num">AEO</span><span>ChatGPT, Perplexity — cited AI answers</span></div>
+      <div class="li"><span class="li-num">GEO</span><span>AI overviews, generative results, summaries</span></div>
+      <div class="li"><span class="li-num" style="color:#080808;background:#C8FF00;padding:0 4px;">+</span><span><strong class="b">HELIO runs all three. Simultaneously. 24/7.</strong></span></div>
+    </div>
+  </div>
+
+  <div class="bot-bar" style="padding-right:28px;">
+    <div class="bot-url">helio.bot</div>
+    <div class="dots" id="d5"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 7 — DARK — COST OF WAITING
+══════════════════════════════════════ -->
+<div class="slide dark" id="s6">
+  <div class="grid"></div><div class="scanline"></div>
+  <div class="bnum" style="right:-20px;bottom:-60px;">07</div>
+
+  <!-- urgent ticker strip -->
+  <div style="position:absolute;top:46px;left:0;right:0;height:32px;background:#C8FF00;z-index:10;display:flex;align-items:center;overflow:hidden;">
+    <div style="white-space:nowrap;font-size:9px;font-weight:700;letter-spacing:0.2em;color:#080808;animation:ticker 12s linear infinite;padding-left:100%;">
+      ⚠ EVERY DAY WITHOUT AEO YOUR COMPETITOR TRAINS AI TO IGNORE YOU &nbsp;&nbsp;&nbsp; ⚠ EVERY DAY WITHOUT AEO YOUR COMPETITOR TRAINS AI TO IGNORE YOU &nbsp;&nbsp;&nbsp; ⚠ EVERY DAY WITHOUT AEO YOUR COMPETITOR TRAINS AI TO IGNORE YOU &nbsp;&nbsp;&nbsp;
+    </div>
+  </div>
+  @keyframes ticker { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="tag">AEO SERIES // 07 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:52px 28px 24px;">
+    <div class="eyebrow" style="margin-bottom:14px;">The Cost of Waiting</div>
+    <div class="hl" style="font-size:40px;margin-bottom:22px;">
+      Every day late<br>is a day your<br>rival <span class="accent">owns AI.</span>
+    </div>
+    <div class="body" style="margin-bottom:24px;">
+      AI models are trained on data they've already seen.<br>
+      Brands building AEO authority now are teaching<br>
+      AI to default to them — permanently.
+    </div>
+    <div class="stat-row">
+      <div class="pill"><div class="pill-num">~0%</div><div class="pill-lbl">Brands with full AEO today</div></div>
+      <div class="pill"><div class="pill-num">Now</div><div class="pill-lbl">Only window that exists</div></div>
+    </div>
+  </div>
+
+  <div class="bot-bar">
+    <div class="bot-url">helio.bot</div>
+    <div class="dots" id="d6"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 8 — LIGHT — CTA
+══════════════════════════════════════ -->
+<div class="slide light" id="s7">
+  <div class="grid"></div><div class="scanline"></div>
+
+  <!-- orbital deco -->
+  <svg style="position:absolute;bottom:-40px;right:-40px;z-index:2;opacity:0.14;" width="260" height="260" viewBox="0 0 260 260">
+    <circle cx="130" cy="130" r="118" fill="none" stroke="#080808" stroke-width="1" stroke-dasharray="5 7"/>
+    <circle cx="130" cy="130" r="78"  fill="none" stroke="#080808" stroke-width="1" stroke-dasharray="3 8"/>
+    <circle cx="130" cy="130" r="38"  fill="none" stroke="#080808" stroke-width="1"/>
+    <circle cx="130" cy="12"  r="7"   fill="#080808"/>
+    <circle cx="212" cy="180" r="5"   fill="#080808"/>
+    <circle cx="52"  cy="188" r="4"   fill="#080808"/>
+  </svg>
+
+  <!-- top accent -->
+  <div style="position:absolute;top:0;left:0;right:0;height:4px;background:#080808;z-index:5;"></div>
+
+  <div class="top-bar">
+    <div class="brand">HELIO</div>
+    <div class="tag">AEO SERIES // 08 OF 08</div>
+  </div>
+
+  <div class="content" style="padding:36px 28px 24px;display:flex;flex-direction:column;justify-content:space-between;">
+    <div>
+      <div class="eyebrow" style="margin-bottom:14px;">Mission Control // HELIO</div>
+      <div class="hl" style="font-size:44px;margin-bottom:22px;">
+        HELIO runs<br>AEO, GEO &<br>SEO —<br><span class="accent">autonomously.</span>
+      </div>
+    </div>
+    <div>
+      <div class="lst" style="margin-bottom:24px;">
+        <div class="li"><span class="li-num">→</span><span>Live AEO audit module</span></div>
+        <div class="li"><span class="li-num">→</span><span>AI citation gap tracking</span></div>
+        <div class="li"><span class="li-num">→</span><span>Schema + entity auto-deployment</span></div>
+      </div>
+      <button class="cta">Join Waitlist → helio.bot</button>
+    </div>
+  </div>
+
+  <div class="bot-bar">
+    <div class="bot-url">helio.bot</div>
+    <div class="dots" id="d7"></div>
+  </div>
+</div>
+
+<!-- NAV -->
+<div class="nav-row">
+  <button class="nbtn" id="prev" onclick="go(-1)" disabled>← PREV</button>
+  <button class="dbtn" id="dlb" onclick="dl()">⬇ SAVE JPG</button>
+  <button class="nbtn" id="next" onclick="go(1)">NEXT →</button>
+</div>
+
+<script>
+  const N=8; let cur=0;
+  function buildDots(i){
+    for(let s=0;s<N;s++){
+      const c=document.getElementById('d'+s);
+      if(!c)continue; c.innerHTML='';
+      for(let j=0;j<N;j++){const d=document.createElement('div');d.className='dot'+(j===i?' on':'');c.appendChild(d);}
+    }
+  }
+  function go(d){
+    document.getElementById('s'+cur).classList.remove('active');
+    cur=Math.max(0,Math.min(N-1,cur+d));
+    document.getElementById('s'+cur).classList.add('active');
+    document.getElementById('counter').textContent=String(cur+1).padStart(2,'0')+' / '+String(N).padStart(2,'0');
+    document.getElementById('prev').disabled=cur===0;
+    document.getElementById('next').disabled=cur===N-1;
+    buildDots(cur);
+  }
+  function dl(){
+    const b=document.getElementById('dlb');
+    b.textContent='⏳ SAVING...'; b.disabled=true;
+    const slide=document.getElementById('s'+cur);
+    const W=480,H=600,SC=2;
+    const canvas=document.createElement('canvas');
+    canvas.width=W*SC; canvas.height=H*SC;
+    const ctx=canvas.getContext('2d');
+    ctx.scale(SC,SC);
+    const svgData=new XMLSerializer().serializeToString(
+      (() => {
+        const clone=slide.cloneNode(true);
+        clone.style.display='block';
+        clone.style.position='static';
+        // embed fonts + styles
+        const styles=[...document.styleSheets].map(ss=>{
+          try{return [...ss.cssRules].map(r=>r.cssText).join('\n');}catch(e){return '';}
+        }).join('\n');
+        const styleEl=document.createElement('style');
+        styleEl.textContent=styles;
+        clone.prepend(styleEl);
+        const fo=document.createElementNS('http://www.w3.org/2000/svg','foreignObject');
+        fo.setAttribute('width',W); fo.setAttribute('height',H);
+        fo.appendChild(clone);
+        const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+        svg.setAttribute('xmlns','http://www.w3.org/2000/svg');
+        svg.setAttribute('width',W); svg.setAttribute('height',H);
+        svg.appendChild(fo);
+        return svg;
+      })()
+    );
+    const blob=new Blob([svgData],{type:'image/svg+xml'});
+    const url=URL.createObjectURL(blob);
+    const img=new Image();
+    img.onload=()=>{
+      ctx.drawImage(img,0,0,W,H);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob=>{
+        const a=document.createElement('a');
+        a.download='HELIO_AEO_Slide_0'+(cur+1)+'.jpg';
+        a.href=URL.createObjectURL(blob);
+        a.click();
+        b.textContent='⬇ SAVE JPG'; b.disabled=false;
+      },'image/jpeg',0.95);
+    };
+    img.onerror=()=>{
+      // fallback: open slide in new tab as SVG for manual save
+      const a=document.createElement('a');
+      a.href=url; a.target='_blank'; a.click();
+      b.textContent='⬇ SAVE JPG'; b.disabled=false;
+    };
+    img.src=url;
+  }
+  buildDots(0);
+</script>
+</body>
+</html>

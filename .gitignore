@@ -1,0 +1,25 @@
+.env
+.env.*
+!.env.example
+.DS_Store
+AGENTS.md
+
+node_modules/
+dist/
+*.tsbuildinfo
+
+.helio/
+.helio-approvals/
+.helio-code-worker-heartbeat.json
+.gstack/
+.ruflo/
+.vercel/
+
+/reports/
+/outputs/
+/backups/
+
+# Generated social/content exports. Keep source tools and brand assets tracked.
+/Content/daily_carousels/
+/Content/day*_carousel_slides*/
+/Content/helio_aeo_carousel_slides/

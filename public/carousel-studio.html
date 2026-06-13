@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HELIO — Carousel Automation Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --acid:   #C8FF00;
+  --deep:   #080808;
+  --panel:  #0F0F0F;
+  --card:   #141414;
+  --border: rgba(200,255,0,0.10);
+  --mute:   rgba(200,255,0,0.40);
+  --text:   rgba(255,255,255,0.85);
+  --sub:    rgba(255,255,255,0.38);
+  --font:   'JetBrains Mono', monospace;
+}
+html,body { background:var(--deep); color:var(--text); font-family:var(--font); min-height:100vh; }
+.app { display:grid; grid-template-rows:56px 1fr; min-height:100vh; }
+
+/* NAV */
+.nav { display:flex; align-items:center; justify-content:space-between; padding:0 28px; border-bottom:1px solid var(--border); background:var(--panel); position:sticky; top:0; z-index:100; }
+.nav-logo { font-size:15px; font-weight:800; letter-spacing:.18em; color:var(--acid); }
+.nav-logo span { color:var(--text); }
+.nav-tag { font-size:7.5px; font-weight:600; letter-spacing:.22em; text-transform:uppercase; color:var(--mute); }
+.nav-status { display:flex; align-items:center; gap:8px; }
+.sdot { width:6px; height:6px; border-radius:50%; background:var(--acid); box-shadow:0 0 8px var(--acid); animation:pulse 2s ease-in-out infinite; }
+.nav-status-txt { font-size:8px; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:var(--mute); }
+@keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 6px var(--acid)} 50%{opacity:.4;box-shadow:0 0 14px var(--acid)} }
+
+/* MAIN GRID */
+.main { display:grid; grid-template-columns:300px 1fr 280px; height:calc(100vh - 56px); overflow:hidden; }
+.sidebar, .preview-panel, .config-panel { overflow-y:auto; padding:20px; scrollbar-width:thin; scrollbar-color:rgba(200,255,0,0.12) transparent; }
+.sidebar      { border-right:1px solid var(--border); background:var(--panel); }
+.preview-panel{ background:var(--deep); padding:24px; }
+.config-panel { border-left:1px solid var(--border); background:var(--panel); }
+
+/* SECTION LABEL */
+.sec-label { font-size:7.5px; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--mute); margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+
+/* STATS */
+.stats-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:20px; }
+.stat-card { background:var(--card); border:1px solid var(--border); border-radius:2px; padding:10px 8px; }
+.stat-num  { font-size:20px; font-weight:800; letter-spacing:-.02em; color:var(--acid); line-height:1; }
+.stat-lbl  { font-size:7px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--sub); margin-top:3px; }
+
+/* CALENDAR */
+.cal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.cal-title  { font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--text); }
+.cal-nav button { background:none; border:1px solid var(--border); color:var(--sub); width:22px; height:22px; border-radius:2px; cursor:pointer; font-family:var(--font); font-size:11px; display:inline-flex; align-items:center; justify-content:center; transition:all .2s; margin-left:4px; }
+.cal-nav button:hover { border-color:var(--acid); color:var(--acid); }
+.cal-days-header { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; margin-bottom:3px; }
+.cal-day-name { font-size:6.5px; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:var(--sub); text-align:center; padding:3px 0; }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; margin-bottom:18px; }
+.cal-day { aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:2px; cursor:pointer; position:relative; border:1px solid transparent; transition:all .15s; }
+.cal-day:hover { border-color:var(--border); background:rgba(200,255,0,0.04); }
+.cal-day.today    { border-color:var(--acid); background:rgba(200,255,0,0.06); }
+.cal-day.selected { background:var(--acid); border-color:var(--acid); }
+.cal-day.selected .cal-day-num { color:var(--deep); font-weight:800; }
+.cal-day.has-content::after { content:''; width:3px; height:3px; border-radius:50%; background:var(--acid); position:absolute; bottom:2px; }
+.cal-day.selected::after { background:var(--deep); }
+.cal-day.posted::after { background:var(--acid); box-shadow:0 0 4px var(--acid); }
+.cal-day.empty { cursor:default; pointer-events:none; }
+.cal-day-num { font-size:8.5px; font-weight:500; color:var(--sub); }
+.cal-day.today .cal-day-num { color:var(--acid); font-weight:700; }
+
+/* DAY LIST */
+.day-item { padding:9px 10px; border:1px solid var(--border); border-radius:2px; cursor:pointer; margin-bottom:5px; transition:all .15s; display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.day-item:hover { border-color:rgba(200,255,0,0.22); background:rgba(200,255,0,0.02); }
+.day-item.active { border-color:var(--acid); background:rgba(200,255,0,0.05); }
+.day-num   { font-size:7px; font-weight:700; letter-spacing:.14em; color:var(--mute); margin-bottom:2px; }
+.day-topic { font-size:9.5px; font-weight:600; letter-spacing:.01em; color:var(--text); line-height:1.35; }
+.day-pillar { font-size:6.5px; font-weight:700; letter-spacing:.10em; text-transform:uppercase; padding:2px 5px; border-radius:2px; margin-top:4px; display:inline-block; }
+.p-problem  { background:rgba(255,60,60,0.12);  color:#ff7070; border:1px solid rgba(255,60,60,0.2); }
+.p-education{ background:rgba(60,120,255,0.12); color:#7aabff; border:1px solid rgba(60,120,255,0.2); }
+.p-solution { background:rgba(60,220,120,0.12); color:#70ffb0; border:1px solid rgba(60,220,120,0.2); }
+.p-urgency  { background:rgba(255,160,60,0.12); color:#ffb870; border:1px solid rgba(255,160,60,0.2); }
+.p-social   { background:rgba(180,60,255,0.12); color:#cc80ff; border:1px solid rgba(180,60,255,0.2); }
+.day-status-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.ds-pending   { background:rgba(255,255,255,0.12); }
+.ds-generated { background:#ffb870; }
+.ds-posted    { background:var(--acid); box-shadow:0 0 5px rgba(200,255,0,0.4); }
+
+/* PREVIEW */
+.preview-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:16px; gap:12px; }
+.preview-title-group { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.preview-day-label { font-size:7.5px; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:var(--mute); }
+.preview-topic { font-size:13px; font-weight:800; letter-spacing:-.01em; color:var(--text); line-height:1.3; }
+.preview-actions { display:flex; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; }
+
+.btn { display:inline-flex; align-items:center; gap:5px; font-family:var(--font); font-size:8.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; padding:9px 14px; border-radius:2px; cursor:pointer; border:none; transition:all .2s; white-space:nowrap; }
+.btn-primary   { background:var(--acid); color:var(--deep); }
+.btn-primary:hover { background:#d4ff1a; }
+.btn-secondary { background:transparent; color:var(--text); border:1px solid var(--border); }
+.btn-secondary:hover { border-color:rgba(200,255,0,0.32); color:var(--acid); }
+.btn-post      { background:#e94057; color:#fff; }
+.btn-post:hover { background:#ff5570; }
+.btn:disabled  { opacity:.35; cursor:not-allowed; }
+
+/* PROGRESS */
+.progress-wrap { margin-bottom:14px; }
+.progress-label { font-size:8px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--mute); margin-bottom:5px; }
+.progress-track { height:3px; background:rgba(200,255,0,0.08); border-radius:2px; overflow:hidden; }
+.progress-fill  { height:100%; background:var(--acid); border-radius:2px; transition:width .4s ease; }
+
+/* SLIDE STRIP */
+.slide-strip { display:flex; gap:8px; overflow-x:auto; margin-bottom:16px; padding-bottom:6px; scrollbar-width:thin; scrollbar-color:rgba(200,255,0,0.12) transparent; min-height:80px; align-items:center; }
+.slide-thumb { width:72px; height:90px; border-radius:2px; border:1px solid var(--border); cursor:pointer; overflow:hidden; flex-shrink:0; position:relative; transition:all .15s; background:var(--card); }
+.slide-thumb:hover { border-color:rgba(200,255,0,0.28); }
+.slide-thumb.active { border-color:var(--acid); box-shadow:0 0 0 1px var(--acid); }
+.thumb-inner { width:600%; height:600%; transform:scale(0.1667); transform-origin:top left; pointer-events:none; }
+
+/* SLIDE PREVIEW */
+.slide-preview-wrap { border:1px solid var(--border); border-radius:2px; overflow:hidden; position:relative; aspect-ratio:4/5; max-width:360px; margin:0 auto 16px; background:var(--card); }
+
+/* EMPTY STATE */
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:12px; }
+.empty-icon { font-size:32px; opacity:.3; }
+.empty-txt  { font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--sub); text-align:center; line-height:1.8; }
+
+/* SLIDE NAV */
+.slide-nav { display:flex; align-items:center; justify-content:center; gap:12px; }
+.slide-nav-btn { background:transparent; border:1px solid var(--border); color:var(--sub); width:32px; height:32px; border-radius:2px; cursor:pointer; font-family:var(--font); font-size:14px; display:inline-flex; align-items:center; justify-content:center; transition:all .2s; }
+.slide-nav-btn:hover { border-color:var(--acid); color:var(--acid); }
+.slide-nav-btn:disabled { opacity:.25; cursor:default; }
+.slide-nav-label { font-size:9px; letter-spacing:.12em; color:var(--sub); min-width:48px; text-align:center; }
+
+/* CONFIG */
+.cfg-section { margin-bottom:22px; }
+.cfg-group   { margin-bottom:12px; }
+.cfg-label   { font-size:7.5px; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:var(--mute); margin-bottom:5px; display:block; }
+.cfg-input, .cfg-select, .cfg-textarea {
+  width:100%; background:rgba(200,255,0,0.03); border:1px solid var(--border); border-radius:2px;
+  color:var(--text); font-family:var(--font); font-size:10px; padding:8px 10px; letter-spacing:.02em;
+  transition:border-color .2s; outline:none;
+}
+.cfg-input:focus, .cfg-select:focus, .cfg-textarea:focus { border-color:rgba(200,255,0,0.32); }
+.cfg-select option { background:#1a1a1a; }
+.cfg-textarea { resize:vertical; min-height:65px; line-height:1.6; }
+.cfg-input[type="password"] { letter-spacing:.06em; }
+
+/* TOGGLE */
+.toggle-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-top:1px solid rgba(200,255,0,0.05); }
+.toggle-label { font-size:9px; font-weight:500; letter-spacing:.02em; color:var(--text); }
+.toggle { width:30px; height:17px; border-radius:9px; background:rgba(255,255,255,0.10); cursor:pointer; position:relative; transition:background .2s; border:none; flex-shrink:0; }
+.toggle.on { background:var(--acid); }
+.toggle::after { content:''; position:absolute; top:3px; left:3px; width:11px; height:11px; border-radius:50%; background:white; transition:left .2s; }
+.toggle.on::after { left:16px; background:var(--deep); }
+
+/* SCHEDULE */
+.sched-item { display:flex; align-items:center; gap:8px; padding:7px 9px; border:1px solid var(--border); border-radius:2px; margin-bottom:5px; }
+.sched-icon { font-size:13px; }
+.sched-info { flex:1; }
+.sched-time { font-size:8.5px; font-weight:700; letter-spacing:.06em; color:var(--text); }
+.sched-desc { font-size:7.5px; letter-spacing:.04em; color:var(--sub); margin-top:1px; }
+.sched-badge { font-size:6.5px; font-weight:700; letter-spacing:.10em; text-transform:uppercase; padding:2px 6px; border-radius:2px; }
+.badge-on  { background:rgba(200,255,0,0.12); color:var(--acid); border:1px solid rgba(200,255,0,0.2); }
+.badge-off { background:rgba(255,255,255,0.05); color:var(--sub); border:1px solid rgba(255,255,255,0.08); }
+
+/* LOG */
+.log { background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:2px; padding:8px; max-height:160px; overflow-y:auto; font-size:8.5px; line-height:1.85; scrollbar-width:thin; }
+.log-line         { color:var(--sub); }
+.log-line.success { color:var(--acid); }
+.log-line.error   { color:#ff7070; }
+.log-line.info    { color:#7aabff; }
+.log-line.warn    { color:#ffb870; }
+
+/* THEME BADGE */
+.theme-indicator { display:inline-flex; align-items:center; gap:5px; font-size:7px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; padding:3px 8px; border-radius:2px; margin-bottom:10px; }
+.theme-dark  { background:rgba(200,255,0,0.08); border:1px solid rgba(200,255,0,0.15); color:var(--acid); }
+.theme-light { background:rgba(0,0,0,0.08); border:1px solid rgba(0,0,0,0.15); color:#080808; background:#C8FF00; }
+
+::-webkit-scrollbar { width:3px; height:3px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(200,255,0,0.12); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <nav class="nav">
+    <div style="display:flex;align-items:center;gap:18px">
+      <div class="nav-logo">HELIO <span>// CAROUSEL STUDIO</span></div>
+      <div class="nav-tag">Instagram Automation Pipeline</div>
+    </div>
+    <div class="nav-status">
+      <div class="sdot"></div>
+      <div class="nav-status-txt" id="agentStatus">AGENT ONLINE</div>
+    </div>
+  </nav>
+
+  <div class="main">
+
+    <!-- ══════════ LEFT SIDEBAR ══════════ -->
+    <div class="sidebar">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-num" id="statPosted">0</div><div class="stat-lbl">Posted</div></div>
+        <div class="stat-card"><div class="stat-num" id="statGen">0</div><div class="stat-lbl">Generated</div></div>
+        <div class="stat-card"><div class="stat-num">30</div><div class="stat-lbl">Planned</div></div>
+      </div>
+
+      <div class="sec-label">Content Calendar — 2026</div>
+      <div class="cal-header">
+        <div class="cal-title" id="calTitle">May 2026</div>
+        <div class="cal-nav">
+          <button onclick="changeMonth(-1)">‹</button>
+          <button onclick="changeMonth(1)">›</button>
+        </div>
+      </div>
+      <div class="cal-days-header">
+        <div class="cal-day-name">Su</div><div class="cal-day-name">Mo</div><div class="cal-day-name">Tu</div>
+        <div class="cal-day-name">We</div><div class="cal-day-name">Th</div><div class="cal-day-name">Fr</div>
+        <div class="cal-day-name">Sa</div>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+
+      <div class="sec-label">30-Day Schedule</div>
+      <div id="dayList"></div>
+    </div>
+
+
+    <!-- ══════════ CENTER PREVIEW ══════════ -->
+    <div class="preview-panel">
+      <div class="preview-header">
+        <div class="preview-title-group">
+          <div class="preview-day-label" id="previewLabel">SELECT A DAY TO BEGIN</div>
+          <div class="preview-topic" id="previewTopic">Click any day → Generate carousel</div>
+        </div>
+        <div class="preview-actions">
+          <button class="btn btn-secondary" id="btnRegen" onclick="regenerate()" disabled>↺ Regen</button>
+          <button class="btn btn-secondary" id="btnExport" onclick="exportHTML()" disabled>↓ Export</button>
+          <button class="btn btn-primary"   id="btnGen"   onclick="generate()">⚡ Generate</button>
+          <button class="btn btn-post"      id="btnPost"  onclick="postToIG()" style="display:none">📸 Post</button>
+        </div>
+      </div>
+
+      <div id="progressWrap" style="display:none" class="progress-wrap">
+        <div class="progress-label" id="progressLabel">Initializing...</div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      </div>
+
+      <div class="slide-strip" id="slideStrip">
+        <div style="opacity:.3;padding:8px 0;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--sub)">No slides yet — select a day and generate</div>
+      </div>
+
+      <div class="slide-preview-wrap" id="previewWrap">
+        <div class="empty-state">
+          <div class="empty-icon">◎</div>
+          <div class="empty-txt">Select a day from the schedule<br>then click ⚡ Generate</div>
+        </div>
+      </div>
+
+      <div class="slide-nav">
+        <button class="slide-nav-btn" id="btnPrev" onclick="prevSlide()" disabled>‹</button>
+        <div class="slide-nav-label" id="slideNavLabel">— / —</div>
+        <button class="slide-nav-btn" id="btnNext" onclick="nextSlide()" disabled>›</button>
+      </div>
+    </div>
+
+
+    <!-- ══════════ RIGHT CONFIG ══════════ -->
+    <div class="config-panel">
+      <div class="sec-label">Configuration</div>
+
+      <!-- API Keys -->
+      <div class="cfg-section">
+        <div class="cfg-group">
+          <label class="cfg-label">AI Provider</label>
+          <select class="cfg-select" id="cfgAiProvider" onchange="onProviderChange()">
+            <option value="anthropic">Anthropic Claude</option>
+            <option value="openai">OpenAI</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="synterolink">SynteroLink</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="custom-openai">Custom OpenAI-Compatible</option>
+          </select>
+        </div>
+        <div class="cfg-group">
+          <label class="cfg-label">AI API Key</label>
+          <input type="password" class="cfg-input" id="cfgApiKey" placeholder="Provider API key" oninput="saveCfg()">
+        </div>
+        <div class="cfg-group">
+          <label class="cfg-label">AI Model</label>
+          <select class="cfg-select" id="cfgAiModel" onchange="saveCfg()"></select>
+        </div>
+        <div class="cfg-group" id="cfgBaseUrlGroup" style="display:none">
+          <label class="cfg-label">API Base URL</label>
+          <input type="text" class="cfg-input" id="cfgApiBaseUrl" placeholder="https://api.example.com/v1" oninput="saveCfg()">
+        </div>
+        <div class="cfg-group">
+          <label class="cfg-label">Instagram Business Account ID</label>
+          <input type="text" class="cfg-input" id="cfgIgId" placeholder="17841400000000000" oninput="saveCfg()">
+        </div>
+        <div class="cfg-group">
+          <label class="cfg-label">Facebook Page Access Token</label>
+          <input type="password" class="cfg-input" id="cfgFbToken" placeholder="EAABwzLixnjY..." oninput="saveCfg()">
+        </div>
+      </div>
+
+      <!-- Post Settings -->
+      <div class="cfg-section">
+        <div class="sec-label" style="border:none;margin-bottom:10px">Post Settings</div>
+        <div class="cfg-group">
+          <label class="cfg-label">Cover Theme</label>
+          <select class="cfg-select" id="cfgCoverTheme" onchange="onCoverThemeChange()">
+            <option value="alternate">↔ Alternate (Dark → Light → Dark…)</option>
+            <option value="dark">Always Dark (#080808)</option>
+            <option value="light">Always Light (Lime #C8FF00)</option>
+          </select>
+          <!-- Live indicator showing what next generated carousel's cover will be -->
+          <div id="nextThemeIndicator" style="margin-top:6px;font-size:8px;letter-spacing:.12em;color:var(--mute);text-transform:uppercase"></div>
+        </div>
+        <div class="cfg-group">
+          <label class="cfg-label">Daily Post Time</label>
+          <input type="time" class="cfg-input" id="cfgPostTime" value="09:00" oninput="saveCfg();renderSchedule()">
+        </div>
+        <div class="cfg-group">
+          <label class="cfg-label">Time Zone</label>
+          <select class="cfg-select" id="cfgTimezone" onchange="saveCfg();renderSchedule()">
+            <option value="Asia/Karachi">Asia/Karachi</option>
+            <option value="UTC">UTC</option>
+            <option value="America/New_York">America/New_York</option>
+            <option value="America/Los_Angeles">America/Los_Angeles</option>
+            <option value="Europe/London">Europe/London</option>
+            <option value="Europe/Berlin">Europe/Berlin</option>
+            <option value="Asia/Dubai">Asia/Dubai</option>
+            <option value="Asia/Singapore">Asia/Singapore</option>
+            <option value="Asia/Tokyo">Asia/Tokyo</option>
+            <option value="Australia/Sydney">Australia/Sydney</option>
+          </select>
+        </div>
+        <div class="cfg-group">
+          <label class="cfg-label">Instagram Caption Hashtags</label>
+          <textarea class="cfg-textarea" id="cfgCaption" oninput="saveCfg()">#SEO #AEO #GEO #TechnicalSEO #SEOTools #AIMarketing #ContentStrategy #DigitalMarketing #HELIO #SEOAutomation #MarketingTips #SearchEngineOptimization #WebDevelopment #DevMarketing #heliobot</textarea>
+        </div>
+      </div>
+
+      <!-- Automation -->
+      <div class="cfg-section">
+        <div class="sec-label" style="border:none;margin-bottom:8px">Automation</div>
+        <div class="toggle-row"><span class="toggle-label">Auto-generate daily</span><button class="toggle" id="togAutoGen" onclick="toggleSetting('autoGen')"></button></div>
+        <div class="toggle-row"><span class="toggle-label">Auto-post on schedule</span><button class="toggle" id="togAutoPost" onclick="toggleSetting('autoPost')"></button></div>
+        <div class="toggle-row"><span class="toggle-label">Save HTML exports locally</span><button class="toggle on" id="togSaveHtml" onclick="toggleSetting('saveHtml')"></button></div>
+        <button class="btn btn-primary" onclick="saveServerConfig()" style="width:100%;justify-content:center;margin-top:12px">Save Server Config</button>
+      </div>
+
+      <!-- Schedule -->
+      <div class="cfg-section">
+        <div class="sec-label" style="border:none;margin-bottom:8px">Daily Schedule</div>
+        <div id="scheduleList"></div>
+      </div>
+
+      <!-- Log -->
+      <div class="cfg-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div class="sec-label" style="border:none;margin-bottom:0">Activity Log</div>
+          <button class="btn btn-secondary" onclick="clearLog()" style="padding:4px 8px;font-size:7px">Clear</button>
+        </div>
+        <div class="log" id="actLog">
+          <div class="log-line info">▸ HELIO Carousel Studio ready</div>
+          <div class="log-line">▸ 30-day content calendar loaded</div>
+          <div class="log-line">▸ Add your Anthropic API key to generate slides</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════
+const DAYS = [
+  {day:1,  pillar:'problem',   topic:'Why Manual SEO Is Slowly Killing Your Growth',            concept:'5 biggest SEO time drains — keyword research, meta tags, internal links, schema, reporting. Show real cost in hours × salary.'},
+  {day:2,  pillar:'education', topic:'What Is AEO & Why Google Is No Longer the Only Game',     concept:'Answer Engine Optimization — how AI-powered search (ChatGPT, Perplexity, Gemini) surfaces answers differently. Define GEO and why technical audiences need to adapt now.'},
+  {day:3,  pillar:'urgency',   topic:'The Cost of Waiting: SEO Compound Debt Explained',        concept:'Untreated technical SEO issues compound like financial debt. Every month you delay fixing crawl errors, broken schemas, missing internal links, the problem compounds.'},
+  {day:4,  pillar:'education', topic:'Core Web Vitals in 2025: What Devs Must Know',            concept:'LCP, CLS, INP explained in plain language with ideal scores and #1 fix for each. Tools to measure all three.'},
+  {day:5,  pillar:'problem',   topic:'5 Technical SEO Mistakes Costing You Rankings Right Now', concept:'Missing canonical tags, duplicate meta titles, slow TTFB, broken redirects, unstructured data. Each with a one-liner fix.'},
+  {day:6,  pillar:'solution',  topic:'Meet HELIO: Your 24/7 AI SEO Agent',                      concept:'What HELIO monitors 24/7, what it auto-fixes, what it reports, time saved per week benchmark.'},
+  {day:7,  pillar:'education', topic:'Schema Markup 101: The Invisible SEO Weapon',             concept:'JSON-LD schema — Article, Product, FAQ, HowTo types, where to add, direct SERP benefit including rich results.'},
+  {day:8,  pillar:'problem',   topic:'Why Your Blog Posts Stop Ranking After 6 Months',         concept:'Content decay lifecycle — freshness signals, link erosion, search intent drift. The 3 core reasons rankings fall.'},
+  {day:9,  pillar:'education', topic:'Internal Linking Strategy: The SEO Multiplier Nobody Uses',concept:'Hub-and-spoke model, PageRank flow, 3 rules for anchor text. Ties to HELIO auto-linking feature.'},
+  {day:10, pillar:'social',    topic:'Real Results: What Happens When You Automate SEO',        concept:'Benchmark data — 40-60% reduction in manual tasks, ranking improvements over 90 days, content output increase, error detection rate.'},
+  {day:11, pillar:'education', topic:'Crawlability & Indexing: Is Google Actually Seeing Your Site?',concept:'Robots.txt pitfalls, noindex tags left from staging, orphaned pages. Simple crawl audit process in 20 minutes.'},
+  {day:12, pillar:'problem',   topic:'The Agency SEO Trap: What You\'re Paying For vs What You Get',concept:'Typical agency deliverables vs actual ranking impact. The oversight and accountability gap. Case for autonomous automation.'},
+  {day:13, pillar:'solution',  topic:'How HELIO Handles Keyword Research Automatically',        concept:'Full workflow: site scan → competitor gap analysis → intent clustering → prioritized action list. Zero manual tools.'},
+  {day:14, pillar:'education', topic:'Page Speed & SEO: The Developer\'s Performance Checklist',concept:'Image compression, JS bundling, caching headers, CDN configuration, lazy loading. Impact score for each tip.'},
+  {day:15, pillar:'urgency',   topic:'Your Competitors Are Already Using AI for SEO',           concept:'Market urgency — AI adoption data, what early adopters do differently, compounding first-mover advantage window closing.'},
+  {day:16, pillar:'education', topic:'Structured Data for E-commerce: Products, Reviews & FAQs',concept:'3 schema types with biggest SERP impact for product businesses. Real examples of rich results and what markup triggers each.'},
+  {day:17, pillar:'problem',   topic:'Why Your Homepage Ranks for Nothing (And How to Fix It)', concept:'Too-broad keyword targeting, keyword cannibalization, missing on-page signals. 5-point homepage SEO fix checklist.'},
+  {day:18, pillar:'solution',  topic:'HELIO\'s Technical Audit: What It Catches That Humans Miss',concept:'Broken canonical chains, hreflang conflicts, redirect loops, orphaned sitemaps. Before HELIO vs After HELIO.'},
+  {day:19, pillar:'education', topic:'The Anatomy of a High-Ranking Blog Post in 2025',         concept:'E-E-A-T signals, semantic keyword density, header hierarchy, FAQ sections, internal linking. Practical writing guide.'},
+  {day:20, pillar:'social',    topic:'5 Technical SEO Wins You Can Get This Week',              concept:'5 wins under 2 hours each: fix title tags, add FAQ schema, compress images, fix longest redirect chain, add 5 internal links.'},
+  {day:21, pillar:'urgency',   topic:'Google\'s Algorithm Updates: How to Stop Playing Catch-Up',concept:'Reactive SEO frustration. Algorithm-proof SEO on fundamentals. HELIO real-time monitoring as anticipation vs recovery.'},
+  {day:22, pillar:'education', topic:'Mobile-First Indexing: Is Your Site Actually Mobile-Ready?',concept:'Viewport meta, touch targets, font sizes, tap spacing, mobile page speed. Tools to test each item.'},
+  {day:23, pillar:'problem',   topic:'Content That Converts vs Content That Just Exists',       concept:'Search intent alignment, content-to-funnel mapping TOFU/MOFU/BOFU. Missing ingredients for most technical teams.'},
+  {day:24, pillar:'solution',  topic:'HELIO + Your Dev Stack: Integrations That Save Hours',    concept:'CMS integrations (WordPress, Webflow, Shopify), CI/CD hooks, Slack alerts. Plugs into existing workflows without migration.'},
+  {day:25, pillar:'education', topic:'Link Building in 2025: What Actually Works for Tech Companies',concept:'Original research, open-source tools, developer documentation, product integrations as natural link magnets.'},
+  {day:26, pillar:'urgency',   topic:'The 6-Month SEO Lag: Why You Need to Start Today',        concept:'SEO results compound. Visualize the compounding growth curve and opportunity cost of 3 more months delay.'},
+  {day:27, pillar:'problem',   topic:'Why Developers Build Fast Websites That Still Rank Slowly',concept:'Pure code quality doesn\'t compensate for missing SEO signals: thin content, poor metadata, wrong URL structure, no authority.'},
+  {day:28, pillar:'solution',  topic:'From Audit to Action: How HELIO Closes the Loop',         concept:'Most tools find problems and leave action to user. HELIO finds, auto-fixes, queues tasks for human review. Closed-loop workflow.'},
+  {day:29, pillar:'social',    topic:'What a High-Performing SEO Stack Looks Like in 2025',     concept:'Best-in-class tools for technical audit, content, backlinks, analytics, automation. HELIO as the automation layer.'},
+  {day:30, pillar:'urgency',   topic:'30 Days of SEO Knowledge — Now It\'s Your Turn',          concept:'Series wrap-up. 5 biggest lessons from the month. Strongest CTA of the entire month for HELIO built on 29 days of trust.'},
+];
+
+const PILLAR_LABEL = {problem:'Problem', education:'Education', solution:'Solution', urgency:'Urgency', social:'Social Proof'};
+
+// ══════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════
+let S = {
+  selectedDay:   null,
+  currentSlide:  0,
+  slides:        [],
+  generated:     {},   // day -> slides[]
+  posted:        {},   // day -> {id, ts}
+  coverCounter:  0,    // increments each generation — even=dark, odd=light for alternate mode
+  settings:      { autoGen:false, autoPost:false, saveHtml:true },
+  calMonth:      new Date(2026,4,1),
+  busy:          false,
+};
+
+// ══════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════
+function log(type, msg) {
+  const el = document.getElementById('actLog');
+  const d = document.createElement('div');
+  d.className = 'log-line ' + type;
+  const t = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  d.textContent = `[${t}] ${msg}`;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+function clearLog() { document.getElementById('actLog').innerHTML = '<div class="log-line info">▸ Log cleared</div>'; }
+
+function setProgress(show, label='', pct=0) {
+  document.getElementById('progressWrap').style.display = show ? 'block' : 'none';
+  document.getElementById('progressLabel').textContent = label;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+function updateStats() {
+  document.getElementById('statPosted').textContent = Object.keys(S.posted).length;
+  document.getElementById('statGen').textContent    = Object.keys(S.generated).length;
+}
+
+function saveState() {
+  try {
+    localStorage.setItem('helio_state2', JSON.stringify({
+      generated: S.generated,
+      posted: S.posted,
+    }));
+  } catch(e){}
+}
+
+function loadState() {
+  try {
+    const state = JSON.parse(localStorage.getItem('helio_state2') || '{}');
+    if (state.generated && typeof state.generated === 'object') S.generated = state.generated;
+    if (state.posted && typeof state.posted === 'object') S.posted = state.posted;
+  } catch(e){}
+}
+
+function isPosted(day) {
+  return Boolean(S.posted[String(day)] || S.posted[day]);
+}
+
+function markGenerated(day, slides) {
+  S.generated[String(day)] = slides;
+  saveState();
+}
+
+function markPosted(day, data={}) {
+  S.posted[String(day)] = {
+    id: data.mediaId || data.id || '',
+    ts: new Date().toISOString(),
+    outDir: data.outDir || '',
+  };
+  saveState();
+}
+
+// ══════════════════════════════════════════════════
+// COVER THEME LOGIC
+// ══════════════════════════════════════════════════
+function getNextCoverTheme() {
+  const mode = document.getElementById('cfgCoverTheme').value;
+  if (mode === 'dark')  return 'dark';
+  if (mode === 'light') return 'light';
+  // alternate: use coverCounter — even = dark, odd = light
+  return S.coverCounter % 2 === 0 ? 'dark' : 'light';
+}
+
+function updateThemeIndicator() {
+  const ind = document.getElementById('nextThemeIndicator');
+  const mode = document.getElementById('cfgCoverTheme').value;
+  if (mode === 'alternate') {
+    const next = getNextCoverTheme();
+    const after = next === 'dark' ? 'light' : 'dark';
+    ind.textContent = `Next cover: ${next.toUpperCase()} → then ${after.toUpperCase()} → …`;
+  } else {
+    ind.textContent = `All covers: ${mode.toUpperCase()}`;
+  }
+}
+
+function onCoverThemeChange() { saveCfg(); updateThemeIndicator(); }
+
+// ══════════════════════════════════════════════════
+// CALENDAR
+// ══════════════════════════════════════════════════
+function renderCalendar() {
+  const m = S.calMonth;
+  document.getElementById('calTitle').textContent = m.toLocaleString('default',{month:'long',year:'numeric'});
+  const firstDay = new Date(m.getFullYear(), m.getMonth(), 1).getDay();
+  const days = new Date(m.getFullYear(), m.getMonth()+1, 0).getDate();
+  let html = '';
+  for (let i=0;i<firstDay;i++) html += '<div class="cal-day empty"></div>';
+  for (let d=1;d<=days;d++) {
+    const isToday = d===20 && m.getMonth()===4 && m.getFullYear()===2026;
+    const isSel   = S.selectedDay===d && m.getMonth()===4;
+    const isPosted= !!S.posted[d];
+    const isGen   = !!S.generated[d];
+    let cls = 'cal-day';
+    if (isToday)  cls += ' today';
+    if (isSel)    cls += ' selected';
+    if (isPosted) cls += ' posted has-content';
+    else if (isGen) cls += ' has-content';
+    html += `<div class="${cls}" onclick="selectDay(${d})"><span class="cal-day-num">${d}</span></div>`;
+  }
+  document.getElementById('calGrid').innerHTML = html;
+}
+function changeMonth(d) { S.calMonth = new Date(S.calMonth.getFullYear(), S.calMonth.getMonth()+d, 1); renderCalendar(); }
+
+// ══════════════════════════════════════════════════
+// DAY LIST
+// ══════════════════════════════════════════════════
+function renderDayList() {
+  document.getElementById('dayList').innerHTML = DAYS.map(e => {
+    const active  = S.selectedDay === e.day;
+    const isPost  = !!S.posted[e.day];
+    const isGen   = !!S.generated[e.day];
+    const dotCls  = isPost ? 'ds-posted' : isGen ? 'ds-generated' : 'ds-pending';
+    return `<div class="day-item ${active?'active':''}" onclick="selectDay(${e.day})">
+      <div style="flex:1;min-width:0">
+        <div class="day-num">DAY ${String(e.day).padStart(2,'0')}</div>
+        <div class="day-topic">${e.topic.length>45?e.topic.slice(0,45)+'…':e.topic}</div>
+        <span class="day-pillar p-${e.pillar}">${PILLAR_LABEL[e.pillar]}</span>
+      </div>
+      <div class="day-status-dot ${dotCls}"></div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════
+// SELECT DAY
+// ══════════════════════════════════════════════════
+function selectDay(day) {
+  S.selectedDay  = day;
+  S.currentSlide = 0;
+  const e = DAYS.find(d=>d.day===day);
+  document.getElementById('previewLabel').textContent = `DAY ${String(day).padStart(2,'0')} — ${PILLAR_LABEL[e.pillar].toUpperCase()}`;
+  document.getElementById('previewTopic').textContent = e.topic;
+  renderCalendar();
+  renderDayList();
+
+  const posted = isPosted(day);
+  const generatedSlides = S.generated[String(day)] || S.generated[day];
+
+  if (generatedSlides) {
+    S.slides = generatedSlides;
+    renderStrip();
+    renderSlide();
+    document.getElementById('btnRegen').disabled  = posted;
+    document.getElementById('btnExport').disabled = false;
+    document.getElementById('btnGen').style.display  = 'none';
+    document.getElementById('btnPost').style.display = 'inline-flex';
+    document.getElementById('btnPost').disabled = posted;
+    document.getElementById('btnPost').innerHTML = posted ? '✓ Posted' : '📸 Post';
+    document.getElementById('btnPrev').disabled = false;
+    document.getElementById('btnNext').disabled = false;
+  } else {
+    S.slides = [];
+    renderEmptyPreview();
+    document.getElementById('btnRegen').disabled  = true;
+    document.getElementById('btnExport').disabled = true;
+    document.getElementById('btnGen').disabled = posted;
+    document.getElementById('btnGen').style.display  = 'inline-flex';
+    document.getElementById('btnGen').innerHTML = posted ? '✓ Posted' : '⚡ Generate';
+    document.getElementById('btnPost').style.display = posted ? 'inline-flex' : 'none';
+    document.getElementById('btnPost').disabled = true;
+    document.getElementById('btnPost').innerHTML = '✓ Posted';
+    document.getElementById('btnPrev').disabled = true;
+    document.getElementById('btnNext').disabled = true;
+  }
+}
+
+// ══════════════════════════════════════════════════
+// GENERATE  ← fixed: uses /v1/messages correctly
+// ══════════════════════════════════════════════════
+async function generate() {
+  const apiKeyInput = document.getElementById('cfgApiKey');
+  const apiKey = normalizeApiKey(apiKeyInput.value);
+  const provider = document.getElementById('cfgAiProvider').value;
+  const model = document.getElementById('cfgAiModel').value.trim();
+  const baseUrl = document.getElementById('cfgApiBaseUrl').value.trim();
+  if (apiKey !== apiKeyInput.value) {
+    apiKeyInput.value = apiKey;
+    saveCfg();
+  }
+  if (!S.selectedDay) { log('warn','▸ Select a day first'); return; }
+  if (isPosted(S.selectedDay)) { log('warn',`▸ Day ${S.selectedDay} is already posted and locked`); return; }
+  if (S.busy) return;
+
+  const e = DAYS.find(d=>d.day===S.selectedDay);
+  const coverTheme = getNextCoverTheme();
+  const slideCount = getSlideCount(e);
+
+  S.busy = true;
+  setProgress(true,'Calling AI provider…',8);
+  log('info',`▸ Generating Day ${e.day}: "${e.topic}" (${slideCount} slides, cover: ${coverTheme}, provider: ${provider})`);
+
+  document.getElementById('btnGen').disabled   = true;
+  document.getElementById('btnRegen').disabled = true;
+
+  try {
+    const prompt = buildPrompt(e, coverTheme, slideCount);
+
+    setProgress(true,'Waiting for AI response…',20);
+
+    const res = await fetch(apiUrl('/api/generate'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider,
+        apiKey,
+        model,
+        baseUrl,
+        day: e,
+        coverTheme,
+        slideCount,
+        prompt,
+      })
+    });
+
+    setProgress(true,'Parsing response…',55);
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(()=>({}));
+      throw new Error(
+        (typeof errBody?.error === 'string' ? errBody.error : errBody?.error?.message)
+        || errBody?.message
+        || `HTTP ${res.status}`
+      );
+    }
+
+    const data = await res.json().catch(()=>({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    const slidesData = data.slides;
+    if (!Array.isArray(slidesData) || slidesData.length === 0) throw new Error('Empty slides array returned');
+
+    setProgress(true,'Rendering slides…',80);
+    log('info',`▸ Rendering ${slidesData.length} slides…`);
+
+    S.slides = slidesData.map((s,i) => renderSlideHTML(s, i, slidesData.length));
+    markGenerated(S.selectedDay, S.slides);
+    S.coverCounter++;  // increment so next Alternate generation flips theme
+
+    setProgress(true,'Done!',100);
+    setTimeout(()=>setProgress(false),700);
+
+    renderStrip();
+    renderSlide();
+    updateStats();
+    updateThemeIndicator();
+
+    document.getElementById('btnRegen').disabled  = false;
+    document.getElementById('btnExport').disabled = false;
+    document.getElementById('btnGen').style.display  = 'none';
+    document.getElementById('btnPost').style.display = 'inline-flex';
+    document.getElementById('btnPost').disabled      = false;
+    document.getElementById('btnPost').innerHTML     = '📸 Post';
+    document.getElementById('btnPrev').disabled = false;
+    document.getElementById('btnNext').disabled = false;
+    renderCalendar();
+    renderDayList();
+
+    log('success',`✓ Day ${e.day} — ${slidesData.length} slides ready`);
+
+  } catch(err) {
+    setProgress(false);
+    log('error',`✗ Generation failed: ${friendlyGenerateError(err.message)}`);
+    document.getElementById('btnGen').disabled   = false;
+    document.getElementById('btnRegen').disabled = false;
+  }
+
+  S.busy = false;
+}
+
+function regenerate() {
+  if (!S.selectedDay) return;
+  if (isPosted(S.selectedDay)) { log('warn',`▸ Day ${S.selectedDay} is already posted and cannot be regenerated`); return; }
+  delete S.generated[String(S.selectedDay)];
+  delete S.generated[S.selectedDay];
+  saveState();
+  S.slides = [];
+  renderEmptyPreview();
+  document.getElementById('btnGen').disabled  = false;
+  document.getElementById('btnGen').style.display  = 'inline-flex';
+  document.getElementById('btnPost').style.display = 'none';
+  renderCalendar();
+  renderDayList();
+  generate();
+}
+
+// ══════════════════════════════════════════════════
+// SLIDE COUNT
+// ══════════════════════════════════════════════════
+function getSlideCount(e) {
+  const t = e.topic.toLowerCase();
+  const complex = ['compound debt','aeo','geo','core web vitals','schema','link building','anatomy','crawlability','indexing'];
+  const medium  = ['keyword','mobile','structured data','page speed','compound','algorithm','stack'];
+  if (complex.some(k=>t.includes(k))) return 10;
+  if (medium.some(k=>t.includes(k)))  return 8;
+  return 6;
+}
+
+// ══════════════════════════════════════════════════
+// AI PROMPT
+// ══════════════════════════════════════════════════
+function buildPrompt(e, coverTheme, count) {
+  const themeSeq = [];
+  for (let i=0;i<count;i++) {
+    themeSeq.push(coverTheme==='dark' ? (i%2===0?'dark':'light') : (i%2===0?'light':'dark'));
+  }
+  return `You are HELIO Carousel AI. Generate a ${count}-slide Instagram carousel for the HELIO SEO Agent brand.
+
+TOPIC: "${e.topic}"
+PILLAR: ${e.pillar}
+CONCEPT: ${e.concept}
+
+BRAND RULES:
+- JetBrains Mono font always
+- Light slides: BG=#C8FF00 (acid lime), text=#080808, accents=#080808
+- Dark slides: BG=#080808, text=#FFFFFF, accents=#C8FF00
+- ALL text LEFT-ALIGNED (never centered). All headlines text-align:left
+- HELIO always ALL CAPS
+- Voice: Terminal not corporate. Precise not fluffy. Confident not arrogant.
+- Vocabulary to USE: autonomous, mission, deploy, detect, orbit, compound, loop, agent, command, protocol, execute, 24/7, live
+- Vocabulary to AVOID: easy, simple, powerful, game-changing, seamless, robust, leverage, synergy
+
+SLIDE THEMES (strict order): ${themeSeq.map((t,i)=>`S${i+1}:${t}`).join(', ')}
+
+SLIDE TYPE RULES:
+- S1 (cover): full BG, ghost word texture in background only at very low opacity, orbital rings decoration bottom-right, eyebrow line, accent rule bar, MASSIVE headline 60-75px, sub-line, body. ALL LEFT-ALIGNED.
+- definition: left vertical accent bar, eyebrow, headline, 2-sentence body, chips array
+- stats: top accent bar, eyebrow, headline, body, 3 stat pills
+- list: ghost number background, eyebrow, headline, 3-4 numbered items
+- comparison: right vertical accent bar, eyebrow, headline, body, tableRows array [{signal, old, new}]
+- split: two halves (left=dark, right=lime always), splitLeft {label,headline,body}, splitRight {label,headline,body}
+- urgency: ghost number, eyebrow, headline, body, scrolling ticker, optional items for bar chart [{label,value}] where value is 10-96
+- cta (LAST SLIDE): orbital deco, pulsing status dot eyebrow, accent rule, big headline, body, ctaText="→ Join the HELIO Waitlist", ctaSubtext="helio.bot · Early access now open", engagement nudge
+
+IMPORTANT:
+- ghostWord should be a single relevant keyword (e.g. "DEBT", "SEARCH", "LINKS", "SPEED")
+- Headlines use \\n for line breaks, max 3-4 words per line
+- For list slides, items MUST be an array of plain strings, never objects
+- For chips, use an array of plain strings
+- For pills, use [{num,label}]
+- Make content highly specific, data-driven, actionable
+- Last slide MUST be type "cta" with the waitlist CTA
+- Cover (S1) headline should be a bold hook statement
+
+Return ONLY this JSON array, nothing else before or after:
+\`\`\`json
+[
+  {
+    "slideNum": 1,
+    "theme": "dark",
+    "type": "cover",
+    "eyebrow": "PILLAR TYPE // CONTEXT",
+    "headline": "BOLD\\nHOOK\\nHERE",
+    "subline": "Supporting statement in one line",
+    "body": "One or two punchy sentences. Direct and specific.",
+    "ghostWord": "KEYWORD",
+    "tagline": "SERIES NAME // HELIO"
+  }
+]
+\`\`\``;
+}
+
+function safeText(value) {
+  if (value == null) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (Array.isArray(value)) return value.map(safeText).filter(Boolean).join(' · ');
+  if (typeof value === 'object') {
+    const preferred = value.text ?? value.label ?? value.title ?? value.item ?? value.name ?? value.signal ?? value.value ?? value.metric;
+    if (preferred != null) return safeText(preferred);
+    return Object.values(value).map(safeText).filter(Boolean).join(' · ');
+  }
+  return String(value);
+}
+
+function esc(value) {
+  return safeText(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function headlineLines(value, maxChars=16, maxLines=4) {
+  const explicit = safeText(value).split('\\n').map(x => x.trim()).filter(Boolean);
+  const source = explicit.length ? explicit : safeText(value).split(/\s+/).filter(Boolean);
+  const lines = [];
+  source.forEach(part => {
+    if (part.includes(' ') || part.length <= maxChars) {
+      const words = part.split(/\s+/).filter(Boolean);
+      let cur = '';
+      words.forEach(w => {
+        const next = cur ? `${cur} ${w}` : w;
+        if (next.length > maxChars && cur) {
+          lines.push(cur);
+          cur = w;
+        } else {
+          cur = next;
+        }
+      });
+      if (cur) lines.push(cur);
+      return;
+    }
+    lines.push(part);
+  });
+  return lines.slice(0, maxLines);
+}
+
+// ══════════════════════════════════════════════════
+// RENDER SLIDE HTML
+// ══════════════════════════════════════════════════
+function renderSlideHTML(s, idx, total) {
+  const dk = s.theme === 'dark';
+  const bg    = dk ? '#080808' : '#C8FF00';
+  const tx    = dk ? '#FFFFFF' : '#080808';
+  const ac    = dk ? '#C8FF00' : '#080808';
+  const mu    = dk ? 'rgba(200,255,0,0.45)' : 'rgba(0,0,0,0.52)';
+  const bd    = dk ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.52)';
+  const gr    = dk ? 'rgba(200,255,0,0.035)'  : 'rgba(0,0,0,0.09)';
+  const bor   = dk ? 'rgba(200,255,0,0.10)'   : 'rgba(0,0,0,0.14)';
+  const url   = dk ? 'rgba(200,255,0,0.35)'   : 'rgba(0,0,0,0.28)';
+  const dotOn = dk ? '#C8FF00' : '#080808';
+  const dotOf = dk ? 'rgba(200,255,0,0.15)' : 'rgba(0,0,0,0.18)';
+
+  const grid = `<div style="position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(${gr} 1px,transparent 1px),linear-gradient(90deg,${gr} 1px,transparent 1px);background-size:30px 30px"></div>`;
+  const scan = dk ? `<div style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.04) 3px,rgba(0,0,0,0.04) 4px)"></div>` : '';
+  const dots = Array.from({length:total},(_,j)=>`<span style="display:inline-block;width:${j===idx?'14px':'5px'};height:5px;border-radius:${j===idx?'3px':'50%'};background:${j===idx?dotOn:dotOf};margin-right:4px;transition:all .3s"></span>`).join('');
+  const topbar = `<div style="position:absolute;top:0;left:0;right:0;height:46px;display:flex;justify-content:space-between;align-items:center;padding:0 24px;z-index:10;border-bottom:1px solid ${bor}">
+    <span style="font-size:14px;font-weight:800;letter-spacing:.16em;color:${ac}">HELIO</span>
+    <span style="font-size:7px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:${mu}">${s.tagline||'CAROUSEL STUDIO'} · ${String(idx+1).padStart(2,'0')}/${String(total).padStart(2,'0')}</span>
+  </div>`;
+  const botbar = `<div style="position:absolute;bottom:0;left:0;right:0;height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 24px;z-index:10;border-top:1px solid ${bor}">
+    <span style="font-size:8px;font-weight:500;letter-spacing:.15em;color:${url}">helio.bot</span>
+    <div>${dots}</div>
+  </div>`;
+  const orb = (op,col,pos)=>`<svg style="position:absolute;${pos};pointer-events:none;opacity:${op}" width="200" height="200" viewBox="0 0 220 220"><circle cx="110" cy="110" r="100" fill="none" stroke="${col}" stroke-width="1" stroke-dasharray="6 6"/><circle cx="110" cy="110" r="65" fill="none" stroke="${col}" stroke-width="1" stroke-dasharray="4 8"/><circle cx="110" cy="110" r="30" fill="none" stroke="${col}" stroke-width="1"/><circle cx="110" cy="10" r="6" fill="${col}"/><circle cx="175" cy="155" r="5" fill="${col}"/><circle cx="50" cy="162" r="4" fill="${col}"/></svg>`;
+  const hl = headlineLines(s.headline, s.type === 'cover' ? 12 : 18, 4);
+  const longest = Math.max(...hl.map(l => l.length), 0);
+  const hlSize = longest > 18 ? '38px' : hl.length>=4 ? '40px' : hl.length===3 ? '46px' : '50px';
+
+  let inner = '';
+
+  // ── COVER ──
+  if (s.type==='cover') {
+    const gw = esc(s.ghostWord||'SEO');
+    const coverFont = Math.max(42, Math.min(60, 66 - Math.max(0, longest - 9) * 3 - Math.max(0, hl.length - 3) * 8));
+    inner = `
+      <div style="position:absolute;top:20px;left:-6px;font-size:140px;font-weight:800;letter-spacing:-.04em;color:${dk?'rgba(200,255,0,0.04)':'rgba(0,0,0,0.055)'};line-height:1;white-space:nowrap;pointer-events:none;font-family:'JetBrains Mono',monospace">${gw}</div>
+      <div style="position:absolute;top:160px;left:-6px;font-size:140px;font-weight:800;letter-spacing:-.04em;color:${dk?'rgba(200,255,0,0.025)':'rgba(0,0,0,0.03)'};line-height:1;white-space:nowrap;pointer-events:none;font-family:'JetBrains Mono',monospace">${gw}S</div>
+      ${orb(dk?0.18:0.12, dk?'#C8FF00':'#080808', 'right:-30px;bottom:50px')}
+      <div style="position:absolute;top:50px;right:0;width:54px;height:54px;background:${dk?'rgba(200,255,0,0.06)':'rgba(0,0,0,0.07)'}"></div>
+      <div style="position:absolute;top:46px;bottom:40px;left:0;right:0;padding:0 24px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;z-index:5">
+        <div style="font-size:8px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:${mu};margin-bottom:14px;display:flex;align-items:center;gap:8px">
+          <span style="width:6px;height:6px;border-radius:50%;background:${ac};display:inline-block${dk?';box-shadow:0 0 6px #C8FF00':''}"></span>
+          ${esc(s.eyebrow||'')}
+        </div>
+        <div style="width:40px;height:3px;background:${ac};border-radius:2px;margin-bottom:16px"></div>
+        <div style="font-size:${coverFont}px;font-weight:800;letter-spacing:-.04em;line-height:1.08;color:${tx};text-align:left;font-family:'JetBrains Mono',monospace">
+          ${hl.map((l,i)=>i===hl.length-1?`<span style="text-decoration:underline;text-underline-offset:6px">${esc(l)}</span>`:esc(l)).join('<br>')}
+        </div>
+        <div style="margin-top:14px;font-size:15px;font-weight:700;letter-spacing:-.01em;color:${bd};text-align:left">${esc(s.subline||'')}</div>
+        <div style="margin-top:9px;font-size:11px;letter-spacing:.02em;line-height:1.68;color:${bd};max-width:340px;text-align:left">${esc(s.body||'')}</div>
+      </div>`;
+
+  // ── DEFINITION ──
+  } else if (s.type==='definition') {
+    const chips = (s.chips||[]);
+    inner = `
+      <div style="position:absolute;top:46px;bottom:40px;left:0;width:4px;background:${ac}"></div>
+      <div style="position:absolute;bottom:-20px;right:-10px;font-size:190px;font-weight:800;letter-spacing:-.05em;color:${dk?'rgba(200,255,0,0.04)':'rgba(0,0,0,0.055)'};pointer-events:none;line-height:1;font-family:'JetBrains Mono',monospace">0${idx}</div>
+      <div style="position:absolute;top:46px;bottom:40px;left:0;right:0;padding:0 24px 0 32px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start">
+        <div style="font-size:8px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:${mu};margin-bottom:10px">${esc(s.eyebrow||'')}</div>
+        <div style="font-size:${hlSize};font-weight:800;letter-spacing:-.02em;line-height:1.08;color:${tx};margin-bottom:12px;text-align:left">${hl.map(esc).join('<br>')}</div>
+        <div style="font-size:12px;letter-spacing:.02em;line-height:1.72;color:${bd};max-width:370px;text-align:left">${esc(s.body||'')}</div>
+        ${chips.length?`<div style="margin-top:14px">${chips.map(c=>`<span style="display:inline-block;padding:5px 10px;border-radius:2px;font-size:8px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;margin-right:5px;margin-top:5px;background:${dk?'rgba(200,255,0,0.08)':'rgba(0,0,0,0.08)'};border:1px solid ${bor};color:${ac}">${esc(c)}</span>`).join('')}</div>`:''}
+      </div>`;
+
+  // ── STATS ──
+  } else if (s.type==='stats') {
+    const pills = (s.pills||[]).slice(0,3);
+    inner = `
+      <div style="position:absolute;top:46px;left:0;right:0;height:4px;background:${ac}"></div>
+      <div style="position:absolute;bottom:-20px;right:-10px;font-size:190px;font-weight:800;letter-spacing:-.05em;color:${dk?'rgba(200,255,0,0.04)':'rgba(0,0,0,0.055)'};pointer-events:none;line-height:1;font-family:'JetBrains Mono',monospace">0${idx}</div>
+      <div style="position:absolute;top:50px;bottom:40px;left:0;right:0;padding:0 24px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start">
+        <div style="font-size:8px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:${mu};margin-bottom:10px">${esc(s.eyebrow||'')}</div>
+        <div style="font-size:${hlSize};font-weight:800;letter-spacing:-.02em;line-height:1.08;color:${tx};margin-bottom:12px;text-align:left">${hl.map(esc).join('<br>')}</div>
+        <div style="font-size:12px;letter-spacing:.02em;line-height:1.72;color:${bd};max-width:380px;text-align:left">${esc(s.body||'')}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+          ${pills.map(p=>`<div style="padding:10px 13px;border-radius:3px;background:${dk?'rgba(200,255,0,0.06)':'rgba(0,0,0,0.07)'};border:1px solid ${bor};display:flex;flex-direction:column;gap:3px">
+            <div style="font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1;color:${ac}">${esc(p.num)}</div>
+            <div style="font-size:7px;letter-spacing:.10em;text-transform:uppercase;color:${bd}">${esc(p.label)}</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+
+  // ── LIST ──
+  } else if (s.type==='list') {
+    const items = (s.items||[]).slice(0,4);
+    const listHeadlineSize = longest > 22 ? '30px' : items.length >= 4 ? '34px' : '38px';
+    inner = `
+      <div style="position:absolute;bottom:-20px;right:-10px;font-size:190px;font-weight:800;letter-spacing:-.05em;color:${dk?'rgba(200,255,0,0.04)':'rgba(0,0,0,0.055)'};pointer-events:none;line-height:1;font-family:'JetBrains Mono',monospace">0${idx}</div>
+      <div style="position:absolute;top:46px;bottom:40px;left:0;right:0;padding:0 24px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start">
+        <div style="font-size:8px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:${mu};margin-bottom:10px">${esc(s.eyebrow||'')}</div>
+        <div style="font-size:${listHeadlineSize};font-weight:800;letter-spacing:-.02em;line-height:1.08;color:${tx};margin-bottom:12px;text-align:left">${hl.map(esc).join('<br>')}</div>
+        <div style="width:100%">
+          ${items.map((it,i)=>`<div style="display:flex;align-items:flex-start;gap:12px;font-size:12px;padding:9px 0;letter-spacing:.02em;color:${bd};${i>0?`border-top:1px solid ${dk?'rgba(200,255,0,0.07)':'rgba(0,0,0,0.10)'}`:''}">
+            <span style="font-size:9px;font-weight:700;color:${ac};min-width:20px;flex-shrink:0;padding-top:1px">${String(i+1).padStart(2,'0')}</span>
+            <span style="line-height:1.55">${esc(it)}</span>
+          </div>`).join('')}
+        </div>
+      </div>`;
+
+  // ── COMPARISON ──
+  } else if (s.type==='comparison') {
+    const rows = (s.tableRows||[]).slice(0,4);
+    inner = `
+      <div style="position:absolute;top:46px;bottom:40px;right:0;width:4px;background:${ac}"></div>
+      <div style="position:absolute;bottom:-20px;left:-10px;font-size:190px;font-weight:800;letter-spacing:-.05em;color:${dk?'rgba(200,255,0,0.04)':'rgba(0,0,0,0.055)'};pointer-events:none;line-height:1;font-family:'JetBrains Mono',monospace">0${idx}</div>
+      <div style="position:absolute;top:46px;bottom:40px;left:0;right:0;padding:0 32px 0 24px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start">
+        <div style="font-size:8px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:${mu};margin-bottom:9px">${s.eyebrow||''}</div>
+        <div style="font-size:${hlSize};font-weight:800;letter-spacing:-.02em;line-height:1.02;color:${tx};margin-bottom:8px;text-align:left">${hl.join('<br>')}</div>
+        <div style="font-size:11px;letter-spacing:.02em;line-height:1.65;color:${bd};max-width:380px;margin-bottom:10px;text-align:left">${s.body||''}</div>
+        <div style="display:flex;margin-bottom:6px;width:100%">
+          ${['Signal','Before','After'].map(h=>`<div style="flex:1;font-size:7px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding-left:10px;color:${mu}">${h}</div>`).join('')}
+        </div>
+        ${rows.map(r=>`<div style="display:flex;gap:3px;margin-bottom:4px;width:100%">
+          <div style="flex:1;padding:7px 10px;font-size:9.5px;font-weight:600;background:${dk?'rgba(200,255,0,0.05)':'rgba(0,0,0,0.05)'};border:1px solid ${bor};color:${bd};border-radius:2px">${r.signal}</div>
+          <div style="flex:1;padding:7px 10px;font-size:9.5px;background:${dk?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)'};border:1px solid ${dk?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.06)'};color:${dk?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.3)'};border-radius:2px">${r.old}</div>
+          <div style="flex:1;padding:7px 10px;font-size:9.5px;font-weight:700;background:${dk?'rgba(200,255,0,0.07)':'rgba(0,0,0,0.08)'};border:1px solid ${dk?'rgba(200,255,0,0.14)':'rgba(0,0,0,0.16)'};color:${ac};border-radius:2px">${r.new}</div>
+        </div>`).join('')}
+      </div>`;
+
+  // ── SPLIT ──
+  } else if (s.type==='split') {
+    const sl = s.splitLeft||{};  const sr = s.splitRight||{};
+    inner = `
+      <div style="position:absolute;top:46px;bottom:40px;left:0;width:50%;background:#080808;display:flex;flex-direction:column;justify-content:center;padding:20px 14px 20px 24px">
+        <div style="font-size:7px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(200,255,0,0.45);margin-bottom:8px">${sl.label||''}</div>
+        <div style="font-size:19px;font-weight:800;letter-spacing:-.02em;line-height:1.05;color:#FFFFFF;text-align:left">${(sl.headline||'').split('\\n').join('<br>')}</div>
+        <div style="font-size:9.5px;line-height:1.65;margin-top:8px;color:rgba(255,255,255,0.38);text-align:left">${sl.body||''}</div>
+      </div>
+      <div style="position:absolute;top:46px;bottom:40px;left:50%;width:1px;background:rgba(200,255,0,0.25);z-index:5"></div>
+      <div style="position:absolute;top:46px;bottom:40px;right:0;width:50%;background:#C8FF00;display:flex;flex-direction:column;justify-content:center;padding:20px 24px 20px 14px">
+        <div style="font-size:7px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(0,0,0,0.52);margin-bottom:8px">${sr.label||''}</div>
+        <div style="font-size:19px;font-weight:800;letter-spacing:-.02em;line-height:1.05;color:#080808;text-align:left">${(sr.headline||'').split('\\n').join('<br>')}</div>
+        <div style="font-size:9.5px;line-height:1.65;margin-top:8px;color:rgba(0,0,0,0.52);text-align:left">${sr.body||''}</div>
+      </div>`;
+
+  // ── URGENCY ──
+  } else if (s.type==='urgency') {
+    const bars = (s.items||[]).slice(0,6);
+    inner = `
+      <div style="position:absolute;bottom:40px;left:0;right:0;height:28px;background:${dk?'rgba(200,255,0,0.07)':'rgba(0,0,0,0.07)'};border-top:1px solid ${bor};overflow:hidden;display:flex;align-items:center;z-index:5">
+        <div style="display:flex;white-space:nowrap;animation:tck 16s linear infinite;font-size:8px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:${ac}">DEADLINE APPROACHING · COMPETITORS ADVANCING · SEO DEBT COMPOUNDING · HELIO DETECTS · HELIO FIXES · AGENT ONLINE · &nbsp;&nbsp;DEADLINE APPROACHING · COMPETITORS ADVANCING · SEO DEBT COMPOUNDING · HELIO DETECTS · HELIO FIXES · AGENT ONLINE · &nbsp;&nbsp;</div>
+      </div>
+      <div style="position:absolute;bottom:-20px;right:-10px;font-size:190px;font-weight:800;letter-spacing:-.05em;color:${dk?'rgba(200,255,0,0.04)':'rgba(0,0,0,0.055)'};pointer-events:none;line-height:1;font-family:'JetBrains Mono',monospace">0${idx}</div>
+      <div style="position:absolute;top:46px;bottom:68px;left:0;right:0;padding:0 24px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start">
+        <div style="font-size:8px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:${mu};margin-bottom:10px">${s.eyebrow||''}</div>
+        <div style="font-size:${hlSize};font-weight:800;letter-spacing:-.02em;line-height:1.02;color:${tx};margin-bottom:10px;text-align:left">${hl.join('<br>')}</div>
+        <div style="font-size:11px;letter-spacing:.02em;line-height:1.72;color:${bd};max-width:380px;text-align:left">${s.body||''}</div>
+        ${bars.length?`<div style="margin-top:12px;width:100%">${bars.map(b=>`
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+            <div style="flex:0 0 70px;font-size:8px;font-weight:600;letter-spacing:.06em;color:${bd};text-overflow:ellipsis;overflow:hidden;white-space:nowrap">${b.label||b}</div>
+            <div style="flex:1;height:8px;background:${dk?'rgba(200,255,0,0.08)':'rgba(0,0,0,0.10)'};border-radius:2px;overflow:hidden">
+              <div style="height:100%;width:${Math.min(b.value||50,96)}%;background:${ac};border-radius:2px"></div>
+            </div>
+          </div>`).join('')}</div>`:''}
+      </div>`;
+
+  // ── CTA ──
+  } else {
+    inner = `
+      <div style="position:absolute;bottom:60px;left:-10px;font-size:145px;font-weight:800;letter-spacing:-.04em;color:${dk?'rgba(200,255,0,0.03)':'rgba(0,0,0,0.04)'};pointer-events:none;line-height:1;white-space:nowrap;font-family:'JetBrains Mono',monospace">HELIO</div>
+      ${orb(dk?0.15:0.11, dk?'#C8FF00':'#080808', 'right:-30px;bottom:68px')}
+      <div style="position:absolute;top:46px;left:0;right:0;height:4px;background:${ac}"></div>
+      <div style="position:absolute;top:56px;bottom:40px;left:0;right:0;padding:0 24px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start">
+        <div style="font-size:8px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:${mu};margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          <span style="width:6px;height:6px;border-radius:50%;background:${ac};display:inline-block${dk?';box-shadow:0 0 6px #C8FF00;animation:pulse2 2s ease-in-out infinite':''};animation:pulse2 2s ease-in-out infinite"></span>
+          ${s.eyebrow||'MISSION CONTROL // HELIO'}
+        </div>
+        <div style="width:40px;height:3px;background:${ac};border-radius:2px;margin-bottom:16px"></div>
+        <div style="font-size:${hl.length>=4?'36px':'42px'};font-weight:800;letter-spacing:-.04em;line-height:.95;color:${tx};text-align:left">${hl.join('<br>')}</div>
+        <div style="font-size:11px;letter-spacing:.02em;line-height:1.72;color:${bd};max-width:370px;margin-top:12px;text-align:left">${s.body||''}</div>
+        <div style="margin-top:18px;background:${ac};color:${dk?'#080808':'#FFFFFF'};font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:13px 24px;border-radius:2px;display:inline-block">${s.ctaText||'→ Join the HELIO Waitlist'}</div>
+        <div style="margin-top:9px;font-size:8px;letter-spacing:.14em;color:${dk?'rgba(200,255,0,0.35)':'rgba(0,0,0,0.30)'};text-transform:uppercase">${s.ctaSubtext||'helio.bot · Early access now open'}</div>
+        <div style="margin-top:11px;font-size:8px;letter-spacing:.14em;color:${dk?'rgba(200,255,0,0.18)':'rgba(0,0,0,0.20)'};text-transform:uppercase">♥ Like · 🔖 Save · Share with your team</div>
+      </div>`;
+  }
+
+  return `<div style="position:relative;width:100%;height:100%;overflow:hidden;background:${bg};font-family:'JetBrains Mono',monospace">${grid}${scan}${topbar}${inner}${botbar}</div>`;
+}
+
+// ══════════════════════════════════════════════════
+// STRIP + PREVIEW
+// ══════════════════════════════════════════════════
+function renderStrip() {
+  const strip = document.getElementById('slideStrip');
+  if (!S.slides.length) { strip.innerHTML = '<div style="opacity:.3;padding:8px 0;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--sub)">No slides yet</div>'; return; }
+  strip.innerHTML = S.slides.map((html,i)=>`
+    <div class="slide-thumb ${i===S.currentSlide?'active':''}" onclick="goSlide(${i})">
+      <div class="thumb-inner">${html}</div>
+    </div>`).join('');
+}
+
+function renderSlide() {
+  const wrap = document.getElementById('previewWrap');
+  if (!S.slides.length) { renderEmptyPreview(); return; }
+  wrap.innerHTML = `<div style="width:100%;height:100%">${S.slides[S.currentSlide]}</div>`;
+  document.getElementById('slideNavLabel').textContent = `${String(S.currentSlide+1).padStart(2,'0')} / ${String(S.slides.length).padStart(2,'0')}`;
+  injectAnims();
+}
+
+function renderEmptyPreview() {
+  document.getElementById('previewWrap').innerHTML = `<div class="empty-state"><div class="empty-icon">◎</div><div class="empty-txt">Select a day → click ⚡ Generate</div></div>`;
+  document.getElementById('slideNavLabel').textContent = '— / —';
+}
+
+function injectAnims() {
+  if (document.getElementById('_sa')) return;
+  const s = document.createElement('style'); s.id='_sa';
+  s.textContent = `@keyframes tck{from{transform:translateX(0)}to{transform:translateX(-50%)}}@keyframes pulse2{0%,100%{opacity:1;box-shadow:0 0 6px #C8FF00}50%{opacity:.4;box-shadow:0 0 14px #C8FF00}}`;
+  document.head.appendChild(s);
+}
+
+function goSlide(i) {
+  S.currentSlide = i;
+  renderSlide();
+  document.querySelectorAll('.slide-thumb').forEach((el,j)=>el.classList.toggle('active',j===i));
+}
+function nextSlide() { if(S.slides.length) goSlide((S.currentSlide+1)%S.slides.length); }
+function prevSlide() { if(S.slides.length) goSlide((S.currentSlide-1+S.slides.length)%S.slides.length); }
+
+// ══════════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════════
+function exportHTML() {
+  if (!S.slides.length||!S.selectedDay) return;
+  const e = DAYS.find(d=>d.day===S.selectedDay);
+  const blob = new Blob([buildExport(e,S.slides)],{type:'text/html'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`helio_day${e.day}_carousel.html`; a.click();
+  log('success',`✓ Day ${e.day} exported`);
+}
+
+function buildExport(e, slides) {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>HELIO Day ${e.day}</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#111;display:flex;flex-direction:column;align-items:center;padding:40px 20px;font-family:'JetBrains Mono',monospace}
+.stage{width:480px;height:600px;position:relative;overflow:hidden;border-radius:2px;box-shadow:0 0 0 1px rgba(200,255,0,.10),0 40px 100px rgba(0,0,0,.85)}
+.slide{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .35s}.slide.active{opacity:1;pointer-events:auto}
+.nav{display:flex;gap:5px;margin-top:18px;flex-wrap:wrap;justify-content:center}
+.pip{width:22px;height:3px;border-radius:2px;background:#2a2a2a;cursor:pointer;transition:background .25s}.pip.active{background:#C8FF00}
+.ctrl{display:flex;align-items:center;gap:12px;margin-top:12px}
+.cbtn{width:36px;height:36px;border-radius:2px;background:#1c1c1c;border:1px solid #2a2a2a;color:#aaa;cursor:pointer;font-family:inherit;font-size:15px;transition:all .2s}
+.cbtn:hover{background:#C8FF00;color:#080808}
+@keyframes tck{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes pulse2{0%,100%{opacity:1;box-shadow:0 0 6px #C8FF00}50%{opacity:.4;box-shadow:0 0 14px #C8FF00}}
+</style></head><body>
+<div style="color:#C8FF00;font-size:8px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;margin-bottom:4px;opacity:.7">HELIO · Carousel Studio</div>
+<div style="color:#fff;font-size:18px;font-weight:800;letter-spacing:-.02em;margin-bottom:2px">DAY ${String(e.day).padStart(2,'0')} — ${e.pillar.toUpperCase()} PILLAR</div>
+<div style="color:#C8FF00;font-size:8px;letter-spacing:.16em;text-transform:uppercase;opacity:.6;margin-bottom:22px">${e.topic}</div>
+<div class="nav" id="nav">${slides.map((_,i)=>`<div class="pip${i===0?' active':''}" onclick="go(${i})"></div>`).join('')}</div>
+<div class="stage">${slides.map((h,i)=>`<div class="slide${i===0?' active':''}" id="s${i}">${h}</div>`).join('')}</div>
+<div class="ctrl"><button class="cbtn" onclick="prev()">‹</button><div id="ci" style="font-size:9px;letter-spacing:.12em;color:#444;min-width:48px;text-align:center">01/${String(slides.length).padStart(2,'0')}</div><button class="cbtn" onclick="next()">›</button></div>
+<script>let c=0,N=${slides.length};
+function go(i){document.getElementById('s'+c).classList.remove('active');document.querySelectorAll('.pip')[c].classList.remove('active');c=i;document.getElementById('s'+c).classList.add('active');document.querySelectorAll('.pip')[c].classList.add('active');document.getElementById('ci').textContent=String(c+1).padStart(2,'0')+'/'+String(N).padStart(2,'0');}
+function next(){go((c+1)%N)}function prev(){go((c-1+N)%N)}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')next();if(e.key==='ArrowLeft')prev()});
+<\/script></body></html>`;
+}
+
+// ══════════════════════════════════════════════════
+// POST TO INSTAGRAM
+// ══════════════════════════════════════════════════
+async function postToIG() {
+  const igId  = document.getElementById('cfgIgId').value.trim();
+  const token = document.getElementById('cfgFbToken').value.trim();
+  const hasBrowserCreds = igId && token;
+  if (S.busy) return;
+  const e = DAYS.find(d=>d.day===S.selectedDay);
+  if (!e || !S.slides.length) { log('warn','▸ Generate a carousel before posting'); return; }
+  if (isPosted(e.day)) { log('warn',`▸ Day ${e.day} is already posted`); return; }
+
+  S.busy = true;
+  document.getElementById('btnPost').disabled = true;
+  setProgress(true,'Rendering JPG slides…',12);
+  log('info',`▸ Posting Day ${e.day} to Instagram…`);
+
+  try {
+    const caption = buildCaption(e);
+    setProgress(true,'Rendering exact JPG slides on server…',18);
+    const res = await fetch(apiUrl('/api/publish'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        igUserId: igId,
+        accessToken: token,
+        day: e,
+        caption,
+        slides: S.slides,
+      }),
+    });
+
+    setProgress(true,'Uploading and publishing…',55);
+
+    const data = await res.json().catch(()=>({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+    markPosted(e.day, data);
+    renderCalendar();
+    renderDayList();
+    updateStats();
+    document.getElementById('btnPost').innerHTML = '✓ Posted';
+    document.getElementById('btnPost').disabled = true;
+    setProgress(true,'Published!',100);
+    setTimeout(()=>setProgress(false),900);
+    log('success',`✓ Published Day ${e.day} — ${data.mediaId}`);
+    if (data.outDir) log('info',`▸ Local archive: ${data.outDir}`);
+  } catch(err) {
+    setProgress(false);
+    document.getElementById('btnPost').disabled = false;
+    log('error',`✗ Publish failed: ${err.message}`);
+    if (!hasBrowserCreds) log('warn','▸ Add Instagram fields or set IG_USER_ID and META_LONG_LIVED_ACCESS_TOKEN in .env');
+  }
+
+  S.busy = false;
+}
+
+async function renderSlidesToJpegs(slides) {
+  await ensureCaptureRenderer();
+  if (document.fonts?.ready) await document.fonts.ready;
+  const rendered = [];
+  for (let i = 0; i < slides.length; i++) {
+    setProgress(true,`Rendering JPG ${i + 1}/${slides.length}…`,18 + Math.round((i / slides.length) * 16));
+    rendered.push(await renderSlideToJpeg(slides[i]));
+  }
+  return rendered;
+}
+
+async function ensureCaptureRenderer() {
+  if (window.html2canvas) return;
+  await new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-capture-renderer="html2canvas"]');
+    if (existing) {
+      existing.addEventListener('load', resolve, { once:true });
+      existing.addEventListener('error', () => reject(new Error('JPG renderer failed to load')), { once:true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    script.async = true;
+    script.dataset.captureRenderer = 'html2canvas';
+    script.onload = resolve;
+    script.onerror = () => reject(new Error('JPG renderer failed to load'));
+    document.head.appendChild(script);
+  });
+}
+
+async function renderSlideToJpeg(slideHtml) {
+  const width = 480;
+  const height = 600;
+  const scale = 2.25;
+  const stage = document.createElement('div');
+  stage.style.cssText = [
+    'position:fixed',
+    'left:-10000px',
+    'top:0',
+    `width:${width}px`,
+    `height:${height}px`,
+    'overflow:hidden',
+    'background:#080808',
+    "font-family:'JetBrains Mono',monospace",
+    'z-index:-1',
+    'pointer-events:none',
+  ].join(';');
+  stage.innerHTML = slideHtml;
+  document.body.appendChild(stage);
+
+  try {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const canvas = await window.html2canvas(stage, {
+      backgroundColor: '#080808',
+      scale,
+      width,
+      height,
+      windowWidth: width,
+      windowHeight: height,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      removeContainer: true,
+      imageTimeout: 15000,
+    });
+    return canvas.toDataURL('image/jpeg', 0.92);
+  } finally {
+    stage.remove();
+  }
+}
+
+function renderSlideToJpegViaSvg(slideHtml) {
+  return new Promise((resolve, reject) => {
+    const width = 480;
+    const height = 600;
+    const scale = 2.25;
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <foreignObject width="100%" height="100%">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden;background:#080808;font-family:'JetBrains Mono',monospace">
+      ${slideHtml}
+    </div>
+  </foreignObject>
+</svg>`;
+    const img = new Image();
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#080808';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.86));
+      } catch (err) {
+        URL.revokeObjectURL(url);
+        reject(err);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Browser JPG render failed'));
+    };
+    img.src = url;
+  });
+}
+
+// ══════════════════════════════════════════════════
+// SCHEDULE + SETTINGS
+// ══════════════════════════════════════════════════
+function renderSchedule() {
+  const t = document.getElementById('cfgPostTime').value || '09:00';
+  const tz = document.getElementById('cfgTimezone').value || 'UTC';
+  const ag = S.settings.autoGen; const ap = S.settings.autoPost;
+  document.getElementById('scheduleList').innerHTML = `
+    <div class="sched-item"><div class="sched-icon">⚡</div><div class="sched-info"><div class="sched-time">Daily at ${t}</div><div class="sched-desc">${tz} · Auto-generate from calendar</div></div><span class="sched-badge ${ag?'badge-on':'badge-off'}">${ag?'ON':'OFF'}</span></div>
+    <div class="sched-item"><div class="sched-icon">📸</div><div class="sched-info"><div class="sched-time">${t} → Post</div><div class="sched-desc">${tz} · Auto-post to Instagram</div></div><span class="sched-badge ${ap?'badge-on':'badge-off'}">${ap?'ON':'OFF'}</span></div>`;
+}
+
+function toggleSetting(k) {
+  S.settings[k] = !S.settings[k];
+  const id = 'tog'+k.charAt(0).toUpperCase()+k.slice(1);
+  document.getElementById(id).classList.toggle('on',S.settings[k]);
+  renderSchedule(); saveCfg();
+  log('info',`▸ ${k} ${S.settings[k]?'enabled':'disabled'}`);
+}
+
+// ══════════════════════════════════════════════════
+// CONFIG PERSISTENCE
+// ══════════════════════════════════════════════════
+function saveCfg() {
+  try {
+    localStorage.setItem('helio_cfg2', JSON.stringify({
+      aiProvider: document.getElementById('cfgAiProvider').value,
+      apiKey:     document.getElementById('cfgApiKey').value,
+      aiModel:    document.getElementById('cfgAiModel').value,
+      apiBaseUrl: document.getElementById('cfgApiBaseUrl').value,
+      igId:       document.getElementById('cfgIgId').value,
+      fbToken:    document.getElementById('cfgFbToken').value,
+      coverTheme: document.getElementById('cfgCoverTheme').value,
+      postTime:   document.getElementById('cfgPostTime').value,
+      timezone:   document.getElementById('cfgTimezone').value,
+      caption:    document.getElementById('cfgCaption').value,
+      settings:   S.settings,
+      coverCounter: S.coverCounter,
+    }));
+  } catch(e){}
+}
+
+function apiUrl(path) {
+  if (location.protocol === 'http:' || location.protocol === 'https:') return path;
+  return `http://localhost:4317${path}`;
+}
+
+function normalizeApiKey(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/\s+/g, '');
+}
+
+function friendlyGenerateError(message) {
+  if (/synterolink failed for all configured models/i.test(message)) {
+    return 'SynteroLink rejected every configured model for this key. This is provider/account access, quota, or routing. Try a different SynteroLink key, switch provider, or check SynteroLink model access.';
+  }
+  if (/invalid x-api-key/i.test(message)) {
+    return 'invalid Anthropic API key. Use a key from console.anthropic.com that starts with sk-ant-api03-. Clear the saved field if an old key is stored.';
+  }
+  if (/incorrect api key|invalid_api_key|unauthorized|401/i.test(message)) {
+    return 'invalid API key or provider/model mismatch. Check AI Provider, API Key, Model, and Base URL.';
+  }
+  if (/synterolink HTTP 403|forbidden/i.test(message)) {
+    return 'SynteroLink rejected this key/model with HTTP 403. The key is reaching SynteroLink, but the account is not allowed to use this endpoint/model right now. Try a different SynteroLink key, select another model, or check SynteroLink account quota/model access.';
+  }
+  if (/HTTP 429|rate limit|quota/i.test(message)) {
+    return 'provider quota or rate limit hit. Wait a few minutes, switch model/key, or check the provider billing/quota dashboard.';
+  }
+  return message;
+}
+
+function buildCaption(e) {
+  const tags = document.getElementById('cfgCaption').value.trim();
+  return [
+    e.topic,
+    '',
+    e.concept,
+    '',
+    'CTA: Join Waitlist -> helio.bot',
+    '',
+    tags,
+  ].join('\n');
+}
+
+function collectAutomationConfig() {
+  const apiKey = normalizeApiKey(document.getElementById('cfgApiKey').value);
+  const accessToken = document.getElementById('cfgFbToken').value.trim();
+  const cfg = {
+    aiProvider: document.getElementById('cfgAiProvider').value,
+    aiModel: document.getElementById('cfgAiModel').value,
+    apiBaseUrl: document.getElementById('cfgApiBaseUrl').value.trim(),
+    igUserId: document.getElementById('cfgIgId').value.trim(),
+    coverTheme: document.getElementById('cfgCoverTheme').value,
+    postTime: document.getElementById('cfgPostTime').value || '09:00',
+    timezone: document.getElementById('cfgTimezone').value || 'UTC',
+    caption: document.getElementById('cfgCaption').value,
+    settings: S.settings,
+    coverCounter: S.coverCounter,
+  };
+  if (apiKey) cfg.apiKey = apiKey;
+  if (accessToken) cfg.accessToken = accessToken;
+  return cfg;
+}
+
+async function saveServerConfig() {
+  try {
+    const res = await fetch(apiUrl('/api/config'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(collectAutomationConfig()),
+    });
+    const data = await res.json().catch(()=>({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    log('success', '✓ Server automation config saved');
+    if (data.config?.apiKeySaved) log('info', '▸ AI API key saved server-side');
+    if (data.config?.accessTokenSaved) log('info', '▸ Instagram token saved server-side');
+  } catch(err) {
+    log('error', `✗ Server config save failed: ${err.message}`);
+  }
+}
+
+async function loadServerConfig() {
+  try {
+    const res = await fetch(apiUrl('/api/config'));
+    if (!res.ok) return;
+    const data = await res.json();
+    const c = data.config || {};
+    if (c.aiProvider) document.getElementById('cfgAiProvider').value = c.aiProvider;
+    onProviderChange(false);
+    if (c.aiModel) document.getElementById('cfgAiModel').value = c.aiModel;
+    if (c.apiBaseUrl) document.getElementById('cfgApiBaseUrl').value = c.apiBaseUrl;
+    if (c.igUserId) document.getElementById('cfgIgId').value = c.igUserId;
+    if (c.coverTheme) document.getElementById('cfgCoverTheme').value = c.coverTheme;
+    if (c.postTime) document.getElementById('cfgPostTime').value = c.postTime;
+    if (c.timezone) document.getElementById('cfgTimezone').value = c.timezone;
+    if (c.caption) document.getElementById('cfgCaption').value = c.caption;
+    if (c.settings) S.settings = {...S.settings, ...c.settings};
+    if (c.dayStatus && typeof c.dayStatus === 'object') {
+      Object.entries(c.dayStatus).forEach(([day, status]) => {
+        if (status?.postedAt) S.posted[String(day)] = {
+          id: status.mediaId || '',
+          ts: status.postedAt,
+          outDir: status.outDir || '',
+        };
+      });
+      saveState();
+      renderCalendar();
+      renderDayList();
+      updateStats();
+    }
+    Object.keys(S.settings).forEach(k=>{const el=document.getElementById('tog'+k.charAt(0).toUpperCase()+k.slice(1));if(el)el.classList.toggle('on',S.settings[k]);});
+    renderSchedule();
+    log('info', '▸ Server automation config loaded');
+  } catch(e){}
+}
+
+function loadCfg() {
+  try {
+    const c = JSON.parse(localStorage.getItem('helio_cfg2')||'{}');
+    if (c.aiProvider) document.getElementById('cfgAiProvider').value = c.aiProvider;
+    if (c.apiKey)     document.getElementById('cfgApiKey').value     = c.apiKey;
+    if (c.aiModel)    document.getElementById('cfgAiModel').value    = c.aiModel;
+    if (c.apiBaseUrl) document.getElementById('cfgApiBaseUrl').value = c.apiBaseUrl;
+    if (c.igId)       document.getElementById('cfgIgId').value       = c.igId;
+    if (c.fbToken)    document.getElementById('cfgFbToken').value    = c.fbToken;
+    if (c.coverTheme) document.getElementById('cfgCoverTheme').value = c.coverTheme;
+    if (c.postTime)   document.getElementById('cfgPostTime').value   = c.postTime;
+    if (c.timezone)   document.getElementById('cfgTimezone').value   = c.timezone;
+    if (c.caption)    document.getElementById('cfgCaption').value    = c.caption;
+    if (c.settings)   { S.settings={...S.settings,...c.settings}; Object.keys(S.settings).forEach(k=>{const el=document.getElementById('tog'+k.charAt(0).toUpperCase()+k.slice(1));if(el)el.classList.toggle('on',S.settings[k]);}); }
+    if (c.coverCounter) S.coverCounter = c.coverCounter;
+  } catch(e){}
+  onProviderChange(false);
+}
+
+function onProviderChange(shouldSave=true) {
+  const provider = document.getElementById('cfgAiProvider').value;
+  const model = document.getElementById('cfgAiModel');
+  const base = document.getElementById('cfgApiBaseUrl');
+  const group = document.getElementById('cfgBaseUrlGroup');
+  const current = model.value;
+  const options = modelOptions(provider);
+  model.innerHTML = options.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('');
+  const keepCurrent = options.some(opt => opt.value === current);
+  model.value = keepCurrent ? current : options[0]?.value || '';
+  group.style.display = provider === 'custom-openai' ? 'block' : 'none';
+  base.placeholder = provider === 'custom-openai' ? 'https://api.example.com/v1' : '';
+  if (shouldSave) saveCfg();
+}
+
+function modelOptions(provider) {
+  const claude = [
+    { value:'claude-opus-4-20250514', label:'Claude Opus 4' },
+    { value:'claude-sonnet-4-20250514', label:'Claude Sonnet 4' },
+    { value:'claude-3-7-sonnet-20250219', label:'Claude 3.7 Sonnet' },
+    { value:'claude-3-5-sonnet-20241022', label:'Claude 3.5 Sonnet' },
+    { value:'claude-3-5-haiku-20241022', label:'Claude 3.5 Haiku' },
+  ];
+  if (provider === 'anthropic') return claude;
+  if (provider === 'synterolink') return [
+    { value:'gpt-5.5', label:'GPT-5.5' },
+    { value:'claude-sonnet-4-6', label:'Claude Sonnet 4.6' },
+    { value:'claude-opus-4-6', label:'Claude Opus 4.6' },
+    { value:'claude-opus-4-7', label:'Claude Opus 4.7' },
+    { value:'gpt-5.3-codex', label:'GPT-5.3 Codex' },
+    { value:'gpt-image-2', label:'GPT Image 2' },
+  ];
+  if (provider === 'openai') return [
+    { value:'gpt-4.1', label:'GPT-4.1' },
+    { value:'gpt-4o', label:'GPT-4o' },
+    { value:'gpt-4o-mini', label:'GPT-4o mini' },
+  ];
+  if (provider === 'deepseek') return [
+    { value:'deepseek-chat', label:'DeepSeek Chat' },
+    { value:'deepseek-reasoner', label:'DeepSeek Reasoner' },
+  ];
+  if (provider === 'openrouter') return [
+    { value:'anthropic/claude-sonnet-4', label:'Claude Sonnet 4' },
+    { value:'anthropic/claude-3.7-sonnet', label:'Claude 3.7 Sonnet' },
+    { value:'anthropic/claude-3.5-sonnet', label:'Claude 3.5 Sonnet' },
+    { value:'openai/gpt-4o-mini', label:'GPT-4o mini' },
+  ];
+  return [
+    { value:'claude-sonnet-4-20250514', label:'Claude Sonnet 4' },
+    { value:'claude-opus-4-20250514', label:'Claude Opus 4' },
+    { value:'gpt-4o-mini', label:'GPT-4o mini' },
+    { value:'gpt-4o', label:'GPT-4o' },
+    { value:'deepseek-chat', label:'DeepSeek Chat' },
+  ];
+}
+
+// ══════════════════════════════════════════════════
+// KEYBOARD
+// ══════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  if (e.key==='ArrowRight') nextSlide();
+  if (e.key==='ArrowLeft')  prevSlide();
+});
+
+// ══════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════
+function init() {
+  loadCfg();
+  loadState();
+  loadServerConfig();
+  renderCalendar();
+  renderDayList();
+  renderSchedule();
+  updateStats();
+  updateThemeIndicator();
+  selectDay(1);
+}
+init();
+</script>
+</body>
+</html>

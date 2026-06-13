@@ -1,0 +1,55 @@
+name: HELIO Daily Carousel
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # 02:00 UTC = 07:00 AM PKT daily
+
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "Custom topic (leave empty for auto-rotation)"
+        required: false
+        default: ""
+
+jobs:
+  generate-and-post:
+    name: Generate → Render → Upload → Post
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run HELIO pipeline
+        env:
+          ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
+          IG_USER_ID:           ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN:      ${{ secrets.IG_ACCESS_TOKEN }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          STORAGE_BUCKET:       ${{ secrets.STORAGE_BUCKET }}
+          CUSTOM_TOPIC:         ${{ github.event.inputs.topic }}
+          CHROME_PATH:          /usr/bin/google-chrome-stable
+        run: node scripts/pipeline.js
+
+      - name: Upload slide artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carousel-slides
+          path: output/*.jpg
+          retention-days: 3

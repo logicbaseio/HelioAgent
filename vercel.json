@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "api/**/*.ts": {
+      "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/daily",
+      "schedule": "15 14 * * *"
+    }
+  ]
+}
