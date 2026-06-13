@@ -9,5 +9,11 @@
       "path": "/api/cron/daily",
       "schedule": "15 14 * * *"
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/((?!api/|install\\.sh|assets/|favicon\\.png|helio-logo-icon\\.png|helio-mascot-cutout\\.png|helio-mascot\\.png|carousel-studio\\.html).*)",
+      "destination": "/index.html"
+    }
   ]
 }
