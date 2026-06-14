@@ -49,6 +49,34 @@ const C = {
   red:"#ff4444",orange:"#ff8800",green:"#00ff88",blue:"#8fbf00",
 };
 
+const USER_PROFILE_KEY = "helio:user-profile:v1";
+const ORGS_KEY = "helio:orgs:v1";
+const ACTIVE_ORG_KEY = "helio:orgs:active:v1";
+const UI_STATE_KEY = "helio:ui-state:v1";
+const DESKTOP_SESSION_KEY = "helio:desktop-session:v1";
+
+function loadJsonStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function isElectronDesktop() {
+  try {
+    return /electron/i.test(String(navigator?.userAgent || ""));
+  } catch {
+    return false;
+  }
+}
+
+function profileIsComplete(profile) {
+  return !!String(profile?.name || "").trim() && !!String(profile?.email || "").trim();
+}
+
 const AI_PROVIDERS = { anthropic:{label:"Anthropic"}, openrouter:{label:"OpenRouter"} };
 
 const OR_MODELS_FALLBACK = [
@@ -13517,25 +13545,33 @@ function Settings({ profile, setProfile, activeOrg, renameOrg, updateOrg }) {
 // ── APP SHELL ─────────────────────────────────────────────────────
 export default function Helio() {
   const orgInit = loadOrganizationState();
-  const [active,setActive]=useState("integrations");
+  const desktopMode = isElectronDesktop();
+  const [active,setActive]=useState(() => {
+    const ui = loadJsonStorage(UI_STATE_KEY, {});
+    return String(ui?.activeModule || "integrations");
+  });
   const [orgs, setOrgs] = useState(orgInit.orgs);
   const [activeOrgId, setActiveOrgId] = useState(orgInit.activeOrgId);
   const [profile, setProfile] = useState(() => {
-    try {
-      const raw = localStorage.getItem("helio:user-profile:v1");
-      if (!raw) return { name: "", email: "", role: "" };
-      return JSON.parse(raw);
-    } catch {
-      return { name: "", email: "", role: "" };
-    }
+    const raw = loadJsonStorage(USER_PROFILE_KEY, null);
+    if (!raw) return { name: "", email: "", role: "" };
+    return raw;
   });
   const [showOrgModal, setShowOrgModal] = useState(false);
   const [newOrgName, setNewOrgName] = useState("");
   const [autonomyRuns, setAutonomyRuns] = useState([]);
   const activeOrg = orgs.find((o)=>o.id===activeOrgId) || orgs[0];
+  const [desktopSession, setDesktopSession] = useState(() => loadJsonStorage(DESKTOP_SESSION_KEY, { authenticated: false }));
+  const [desktopAuthDraft, setDesktopAuthDraft] = useState(() => ({
+    name: String(profile?.name || ""),
+    email: String(profile?.email || ""),
+    role: String(profile?.role || "Owner"),
+    orgName: String(orgInit?.orgs?.find((o) => o.id === orgInit.activeOrgId)?.name || orgInit?.orgs?.[0]?.name || "Default Organization"),
+  }));
   const integrations = activeOrg?.integrations || defaultIntegrationsState();
   const skillsState = activeOrg?.skillsState || defaultSkillsState();
   const agentOnline = !!activeOrg?.agentOnline;
+  const desktopAuthRequired = desktopMode && (!desktopSession?.authenticated || !profileIsComplete(profile));
   const setIntegrations = (updater) => setOrgs((prev)=>prev.map((o)=>o.id!==activeOrgId?o:{...o,integrations:typeof updater==="function"?updater(o.integrations):updater}));
   const setSkillsState = (updater) => setOrgs((prev)=>prev.map((o)=>o.id!==activeOrgId?o:{...o,skillsState:typeof updater==="function"?updater(o.skillsState):updater}));
   const setAgentOnline = (updater) => setOrgs((prev)=>prev.map((o)=>o.id!==activeOrgId?o:{...o,agentOnline:typeof updater==="function"?updater(o.agentOnline):updater}));
@@ -13548,16 +13584,33 @@ export default function Helio() {
   useEffect(() => {
     setActiveOrgContext(activeOrg || {});
   }, [activeOrg]);
+  useEffect(() => {
+    setDesktopAuthDraft((prev) => ({
+      name: prev.name || String(profile?.name || ""),
+      email: prev.email || String(profile?.email || ""),
+      role: prev.role || String(profile?.role || "Owner"),
+      orgName: String(activeOrg?.name || prev.orgName || "Default Organization"),
+    }));
+  }, [activeOrg?.id, activeOrg?.name, profile?.name, profile?.email, profile?.role]);
 
   useEffect(() => {
     try {
-      localStorage.setItem("helio:orgs:v1", JSON.stringify({ orgs }));
-      localStorage.setItem("helio:orgs:active:v1", activeOrgId);
+      localStorage.setItem(ORGS_KEY, JSON.stringify({ orgs }));
+      localStorage.setItem(ACTIVE_ORG_KEY, activeOrgId);
     } catch {}
   }, [orgs, activeOrgId]);
   useEffect(() => {
-    try { localStorage.setItem("helio:user-profile:v1", JSON.stringify(profile)); } catch {}
+    try { localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile)); } catch {}
   }, [profile]);
+  useEffect(() => {
+    try { localStorage.setItem(UI_STATE_KEY, JSON.stringify({ activeModule: active })); } catch {}
+  }, [active]);
+  useEffect(() => {
+    if (!desktopMode || !desktopSession?.authenticated) return;
+    const next = { ...desktopSession, lastSeenAt: new Date().toISOString() };
+    setDesktopSession(next);
+    try { localStorage.setItem(DESKTOP_SESSION_KEY, JSON.stringify(next)); } catch {}
+  }, [desktopMode]);
   useEffect(() => {
     setAutonomyRuns(loadAutonomyRuns(activeOrgId));
   }, [activeOrgId, orgs]);
@@ -13575,6 +13628,27 @@ export default function Helio() {
   const renameOrg = (orgId, name) => setOrgs((prev)=>prev.map((o)=>o.id===orgId?{...o,name}:o));
   const updateAutonomy = (orgId, patch) => setOrgs((prev)=>prev.map((o)=>o.id===orgId?{...o,autonomy:{...(o.autonomy||{}),...patch}}:o));
   const updateOrg = (orgId, patch) => setOrgs((prev)=>prev.map((o)=>o.id===orgId?{...o,...patch}:o));
+  const completeDesktopActivation = () => {
+    const name = String(desktopAuthDraft.name || "").trim();
+    const email = String(desktopAuthDraft.email || "").trim();
+    const role = String(desktopAuthDraft.role || "").trim() || "Owner";
+    const orgName = String(desktopAuthDraft.orgName || "").trim() || "Default Organization";
+    if (!name || !email) return;
+    setProfile({ name, email, role });
+    if (activeOrg?.id) renameOrg(activeOrg.id, orgName);
+    const next = {
+      authenticated: true,
+      name,
+      email,
+      role,
+      orgName,
+      activatedAt: desktopSession?.activatedAt || new Date().toISOString(),
+      lastSeenAt: new Date().toISOString(),
+    };
+    setDesktopSession(next);
+    try { localStorage.setItem(DESKTOP_SESSION_KEY, JSON.stringify(next)); } catch {}
+    setActive("integrations");
+  };
   const runAutonomyNow = async (orgId) => {
     const org = orgs.find((o)=>o.id===orgId);
     if (!org) return;
@@ -13711,6 +13785,24 @@ export default function Helio() {
         <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:14}}>
           <Btn onClick={()=>{setShowOrgModal(false);setNewOrgName("");}} variant="blue">CANCEL</Btn>
           <Btn onClick={createOrg} disabled={!newOrgName.trim()}>CREATE</Btn>
+        </div>
+      </div>
+    </div>}
+    {desktopAuthRequired&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.94)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1001,padding:24}}>
+      <div style={{width:"min(720px,94vw)",background:"#0b0d09",border:`1px solid ${C.lime}`,padding:24,boxShadow:"0 0 0 1px #182109 inset"}}>
+        <div style={{color:C.lime,fontFamily:"monospace",fontSize:18,letterSpacing:4,marginBottom:10}}>ACTIVATE HELIO AGENT</div>
+        <div style={{color:C.text,fontFamily:"monospace",fontSize:11,lineHeight:1.7,marginBottom:18,maxWidth:620}}>
+          Complete this local activation once. Helio will keep your profile, organization, connected tools, and workspace state on this machine so the app resumes from the same point on the next launch.
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Input label="Full Name" value={desktopAuthDraft.name} onChange={(v)=>setDesktopAuthDraft((p)=>({ ...p, name:v }))} placeholder="Your name"/>
+          <Input label="Work Email" value={desktopAuthDraft.email} onChange={(v)=>setDesktopAuthDraft((p)=>({ ...p, email:v }))} placeholder="you@company.com"/>
+          <Input label="Role" value={desktopAuthDraft.role} onChange={(v)=>setDesktopAuthDraft((p)=>({ ...p, role:v }))} placeholder="Founder / SEO Lead"/>
+          <Input label="Organization" value={desktopAuthDraft.orgName} onChange={(v)=>setDesktopAuthDraft((p)=>({ ...p, orgName:v }))} placeholder="Your company or client name"/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginTop:18}}>
+          <div style={{color:C.muted,fontFamily:"monospace",fontSize:10}}>Desktop-only activation. Existing settings stay persisted between relaunches.</div>
+          <Btn onClick={completeDesktopActivation} disabled={!String(desktopAuthDraft.name||"").trim() || !String(desktopAuthDraft.email||"").trim()}>CONTINUE TO HELIO</Btn>
         </div>
       </div>
     </div>}

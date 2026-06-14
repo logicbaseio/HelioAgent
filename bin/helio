@@ -17,7 +17,7 @@ usage() {
 Helio Agent CLI
 
 Usage:
-  helio start          Start dashboard + local workers
+  helio start [--no-open]  Start dashboard + local workers
   helio stop           Stop dashboard + local workers
   helio restart        Restart Helio
   helio status         Show process status
@@ -143,6 +143,13 @@ start_worker() {
 }
 
 cmd_start() {
+  local no_open=0
+  for arg in "$@"; do
+    case "$arg" in
+      --no-open) no_open=1 ;;
+      *) fail "unknown option for start: $arg" ;;
+    esac
+  done
   ensure_dirs
   require_app_dir
   ensure_env
@@ -151,7 +158,9 @@ cmd_start() {
   start_worker
   sleep 1
   status
-  open_dashboard
+  if [ "$no_open" -ne 1 ]; then
+    open_dashboard
+  fi
 }
 
 stop_pid_file() {
@@ -209,7 +218,7 @@ cmd_logs() {
 
 cmd="${1:-help}"
 case "$cmd" in
-  start) cmd_start ;;
+  start) shift || true; cmd_start "$@" ;;
   stop) cmd_stop ;;
   restart) cmd_stop; cmd_start ;;
   status) status ;;

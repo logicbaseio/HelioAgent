@@ -40,11 +40,11 @@ function statusHtml() {
       <body>
         <div class="wrap">
           <h1>HELIO AGENT</h1>
-          <p>Starting the local autonomous SEO + AEO/GEO agent. Helio will install/update the local runtime, start the dashboard and worker, then open localhost.</p>
+          <p>Starting the local autonomous SEO + AEO/GEO agent. Helio will install or update the local runtime, start the dashboard and worker, then load the dashboard inside this app.</p>
           <div class="bar"></div>
           <div>
             <button onclick="location.reload()">RETRY VIEW</button>
-            <button onclick="window.open('${HELIO_URL}')">OPEN LOCALHOST</button>
+            <button onclick="location.href='${HELIO_URL}'">OPEN DASHBOARD</button>
           </div>
           <pre id="log">${logLines.join("\n")}</pre>
         </div>
@@ -67,6 +67,7 @@ function createWindow() {
     title: "Helio Agent",
     backgroundColor: "#050705",
     webPreferences: {
+      partition: "persist:helio-agent",
       nodeIntegration: true,
       contextIsolation: false,
     },
@@ -123,7 +124,7 @@ async function startHelioAgent() {
   try {
     addLog("Preparing Helio local agent runtime.");
     await runShell(`curl -fsSL ${INSTALLER_URL} | bash`);
-    await runShell("helio start");
+    await runShell("helio start --no-open");
     addLog("Waiting for local dashboard.");
     await waitForDashboard();
     addLog(`Opening ${HELIO_URL}`);
