@@ -82,6 +82,12 @@ shell_source_env_prefix() {
   printf 'set -a; [ -f %q ] && . %q; set +a; ' "$HELIO_ENV_FILE" "$HELIO_ENV_FILE"
 }
 
+load_env_into_shell() {
+  set -a
+  [ -f "$HELIO_ENV_FILE" ] && . "$HELIO_ENV_FILE"
+  set +a
+}
+
 ensure_env() {
   require_app_dir
   if [ ! -f "$HELIO_ENV_FILE" ]; then
@@ -152,6 +158,11 @@ start_worker() {
     echo "Helio Code worker script not found; skipping worker start."
     return
   fi
+  if [ -z "${DATABASE_URL:-}" ] && [ "${HELIO_CODE_ALLOW_MEMORY_FALLBACK:-false}" = "true" ]; then
+    echo "Helio Code worker skipped: local execution mode is active and does not require the Postgres worker."
+    rm -f "$worker_pid_file"
+    return
+  fi
   echo "Starting Helio Code worker"
   (
     cd "$HELIO_APP_DIR"
@@ -171,6 +182,7 @@ cmd_start() {
   ensure_dirs
   require_app_dir
   ensure_env
+  load_env_into_shell
   ensure_dependencies
   start_dashboard
   start_worker
