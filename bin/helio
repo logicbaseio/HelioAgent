@@ -70,6 +70,18 @@ process_status() {
   fi
 }
 
+append_env_if_missing() {
+  local key="$1"
+  local value="$2"
+  if ! grep -q "^${key}=" "$HELIO_ENV_FILE" 2>/dev/null; then
+    echo "${key}=${value}" >> "$HELIO_ENV_FILE"
+  fi
+}
+
+shell_source_env_prefix() {
+  printf 'set -a; [ -f %q ] && . %q; set +a; ' "$HELIO_ENV_FILE" "$HELIO_ENV_FILE"
+}
+
 ensure_env() {
   require_app_dir
   if [ ! -f "$HELIO_ENV_FILE" ]; then
@@ -85,8 +97,14 @@ ensure_env() {
       echo "HELIO_CODE_AGENT_COMMAND=\"node $HELIO_APP_DIR/scripts/helio-code-agent.mjs\""
       echo "HELIO_CODE_WORKSPACE_ROOT=$HELIO_HOME/workspaces"
       echo "HELIO_CODE_AUTO_MIGRATE=true"
+      echo "HELIO_CODE_ALLOW_MEMORY_FALLBACK=true"
     } >> "$HELIO_ENV_FILE"
   fi
+  append_env_if_missing "HELIO_PUBLIC_URL" "http://$HELIO_HOST:$HELIO_PORT"
+  append_env_if_missing "HELIO_CODE_AGENT_COMMAND" "\"node $HELIO_APP_DIR/scripts/helio-code-agent.mjs\""
+  append_env_if_missing "HELIO_CODE_WORKSPACE_ROOT" "$HELIO_HOME/workspaces"
+  append_env_if_missing "HELIO_CODE_AUTO_MIGRATE" "true"
+  append_env_if_missing "HELIO_CODE_ALLOW_MEMORY_FALLBACK" "true"
 }
 
 ensure_dependencies() {
@@ -118,7 +136,7 @@ start_dashboard() {
   echo "Starting Helio dashboard on http://$HELIO_HOST:$HELIO_PORT/dashboard"
   (
     cd "$HELIO_APP_DIR"
-    nohup npm run dev -- --host "$HELIO_HOST" --port "$HELIO_PORT" > "$HELIO_LOG_DIR/dashboard.log" 2>&1 &
+    nohup /bin/bash -lc "$(shell_source_env_prefix) npm run dev -- --host \"$HELIO_HOST\" --port \"$HELIO_PORT\"" > "$HELIO_LOG_DIR/dashboard.log" 2>&1 &
     echo $! > "$dashboard_pid_file"
   )
 }
@@ -137,7 +155,7 @@ start_worker() {
   echo "Starting Helio Code worker"
   (
     cd "$HELIO_APP_DIR"
-    nohup npm run helio-code:worker > "$HELIO_LOG_DIR/helio-code-worker.log" 2>&1 &
+    nohup /bin/bash -lc "$(shell_source_env_prefix) npm run helio-code:worker" > "$HELIO_LOG_DIR/helio-code-worker.log" 2>&1 &
     echo $! > "$worker_pid_file"
   )
 }

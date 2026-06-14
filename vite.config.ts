@@ -2,10 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { buildHelioCodeEvidence, createHelioCodeJobRecord, selectHelioCodeSkill } from "./src/lib/helio-code.js";
+import { createHelioCodeJobRecord } from "./src/lib/helio-code.js";
 import { handleDataForSeoBacklinks } from "./src/server/dataforseo-backlinks.mjs";
 import { handleHelioBacklinkAnalysis } from "./src/server/helio-backlink-api.mjs";
 import { buildHelioCodeReadiness } from "./src/server/helio-code/readiness.mjs";
+import { executeHelioCodeJob } from "./scripts/helio-code-worker.mjs";
 import { appendHelioCodeLog, createHelioCodeJob, getHelioCodeJob, listHelioCodeJobs } from "./src/server/helio-code/store.mjs";
 import { getHelioCodeWorkerStatus, startHelioCodeWorker } from "./src/server/helio-code/worker-supervisor.mjs";
 import { createApprovalToken, decideApprovalRequest, getApprovalRequest, listApprovalRequests, saveApprovalRequest } from "./src/server/approval-channel/store.mjs";
@@ -85,42 +86,8 @@ function helioAuditReportApi() {
 
 function helioCodeApi() {
   const jobs = new Map<string, any>();
-  const timers = new Map<string, NodeJS.Timeout[]>();
   const dbEnabled = () => !!String(process.env.DATABASE_URL || "").trim();
   const memoryFallbackAllowed = () => String(process.env.HELIO_CODE_ALLOW_MEMORY_FALLBACK || "false").toLowerCase() === "true";
-
-  const localCompleteJob = (job: any) => {
-    const now = new Date().toISOString();
-    const skill = selectHelioCodeSkill({ issueType: job.payload.issueType, skillId: job.payload.skillId });
-    const evidence = buildHelioCodeEvidence({
-      job,
-      repoProfile: {
-        framework: "queued-worker",
-        packageManager: "unknown",
-        buildCommand: "worker-managed",
-        testCommand: "worker-managed",
-        note: "Local dev adapter created this evidence. Production jobs are completed by the Helio Code worker.",
-      },
-      changedFiles: [`helio-code/${job.payload.missionId}-${skill.id}.md`],
-      checks: [
-        { name: "payload-validation", status: "passed", details: "Mission-to-code job payload accepted." },
-        { name: "skill-selection", status: "passed", details: `Selected ${skill.name}.` },
-      ],
-      pullRequestUrl: "",
-      branch: `helio-code/${job.payload.missionId}`,
-    });
-    return {
-      ...job,
-      status: "code-pr-opened",
-      updatedAt: now,
-      result: evidence,
-      logs: [
-        ...job.logs,
-        { at: now, level: "info", message: "Local Helio Code adapter prepared worker handoff evidence." },
-        { at: now, level: "info", message: "Production mode will clone the repo, run the coding agent, checks, and open a GitHub App PR." },
-      ],
-    };
-  };
 
   const appendJobLog = (job: any, level: string, message: string) => {
     const now = new Date().toISOString();
@@ -131,80 +98,50 @@ function helioCodeApi() {
     };
   };
 
-  const advanceLocalJobState = (job: any) => {
-    const runningDelay = Number(process.env.HELIO_CODE_DEV_RUNNING_DELAY_MS || 1200);
-    const finishDelay = Number(process.env.HELIO_CODE_DEV_FINISH_DELAY_MS || 3800);
-    const simulateSuccess = String(process.env.HELIO_CODE_DEV_SIMULATE_SUCCESS || "false").toLowerCase() === "true";
-    const startedAt = Number(job?.result?.localLifecycleStartedAt || Date.parse(job?.createdAt || "") || Date.now());
-    const elapsed = Date.now() - startedAt;
-    const status = String(job?.status || "");
-    if (status === "code-queued" && elapsed >= runningDelay) {
-      return appendJobLog(
-        { ...job, status: "code-running" },
-        "info",
-        "Local adapter: job running. Waiting for real Helio Code worker or simulated completion."
-      );
-    }
-    if ((status === "code-queued" || status === "code-running") && elapsed >= finishDelay) {
-      if (simulateSuccess) return localCompleteJob(job);
-      return appendJobLog(
-        {
-          ...job,
-          status: "code-failed",
-          result: {
-            ...(job.result || {}),
-            failureReason:
-              "Local dev adapter does not execute real repo changes by default. Configure production Helio Code worker to open real PRs.",
-          },
-        },
-        "error",
-        "No production Helio Code worker attached. Marking as failed to avoid false success."
-      );
-    }
-    return job;
-  };
-
-  const scheduleLocalLifecycle = (jobId: string) => {
-    const runningDelay = Number(process.env.HELIO_CODE_DEV_RUNNING_DELAY_MS || 1200);
-    const finishDelay = Number(process.env.HELIO_CODE_DEV_FINISH_DELAY_MS || 3800);
-    const simulateSuccess = String(process.env.HELIO_CODE_DEV_SIMULATE_SUCCESS || "false").toLowerCase() === "true";
-
-    const t1 = setTimeout(() => {
-      const current = jobs.get(jobId);
-      if (!current) return;
-      const next = appendJobLog(
-        { ...current, status: "code-running" },
-        "info",
-        "Local adapter: job running. Waiting for real Helio Code worker or simulated completion."
-      );
-      jobs.set(jobId, next);
-    }, Math.max(300, runningDelay));
-
-    const t2 = setTimeout(() => {
-      const current = jobs.get(jobId);
-      if (!current) return;
-      if (simulateSuccess) {
-        const completed = localCompleteJob(current);
-        jobs.set(jobId, completed);
+  const runLocalJob = async (jobId: string) => {
+    const current = jobs.get(jobId);
+    if (!current) return;
+    const running = appendJobLog(
+      { ...current, status: "code-running" },
+      "info",
+      "PROCESSING AUDIT PIPELINE"
+    );
+    jobs.set(jobId, running);
+    try {
+      const result = await executeHelioCodeJob(running);
+      if (!result?.job) {
+        jobs.set(
+          jobId,
+          appendJobLog(
+            {
+              ...running,
+              status: "code-failed",
+              result: { ...(running.result || {}), failureReason: "Local Helio Code execution returned no job result." },
+            },
+            "error",
+            "Local Helio Code execution returned no job result."
+          )
+        );
         return;
       }
-      const failed = appendJobLog(
-        {
-          ...current,
-          status: "code-failed",
-          result: {
-            ...(current.result || {}),
-            failureReason:
-              "Local dev adapter does not execute real repo changes by default. Configure production Helio Code worker to open real PRs.",
+      jobs.set(jobId, {
+        ...result.job,
+        logs: Array.isArray(result.job.logs) ? result.job.logs : running.logs,
+      });
+    } catch (error: any) {
+      jobs.set(
+        jobId,
+        appendJobLog(
+          {
+            ...running,
+            status: "code-failed",
+            result: { ...(running.result || {}), failureReason: error?.message || "Local Helio Code execution failed." },
           },
-        },
-        "error",
-        "No production Helio Code worker attached. Marking as failed to avoid false success."
+          "error",
+          error?.message || "Local Helio Code execution failed."
+        )
       );
-      jobs.set(jobId, failed);
-    }, Math.max(1200, finishDelay));
-
-    timers.set(jobId, [t1, t2]);
+    }
   };
 
   const handler = async (req: any, res: any, next: any) => {
@@ -242,16 +179,15 @@ function helioCodeApi() {
             ...created.job,
             status: "code-queued",
             result: {
-              mode: "local-dev-adapter",
-              note: "Queued in local adapter. Real PR creation requires production Helio Code worker.",
-              localLifecycleStartedAt: Date.now(),
+              mode: "local-execution",
+              note: "Queued in local execution mode. Helio will clone the repo, run the coding agent, verify checks, and push a PR from this machine.",
             },
           },
           "info",
           "Local adapter accepted job. Queueing execution lifecycle."
         );
         jobs.set(queued.id, queued);
-        scheduleLocalLifecycle(queued.id);
+        void runLocalJob(queued.id);
         return sendJson(res, 202, { ok: true, job: queued });
       }
 
@@ -262,9 +198,8 @@ function helioCodeApi() {
           return sendJson(res, 200, { ok: true, job });
         }
         const current = jobs.get(jobId);
-        const job = current ? advanceLocalJobState(current) : null;
+        const job = current || null;
         if (!job) return sendJson(res, 404, { ok: false, error: "Helio Code job not found" });
-        if (current !== job) jobs.set(jobId, job);
         return sendJson(res, 200, { ok: true, job });
       }
 

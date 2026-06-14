@@ -65,10 +65,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { buildHelioCodeEvidence, createHelioCodeJobRecord, selectHelioCodeSkill } from "./src/lib/helio-code.js";
+import { createHelioCodeJobRecord } from "./src/lib/helio-code.js";
 import { handleDataForSeoBacklinks } from "./src/server/dataforseo-backlinks.mjs";
 import { handleHelioBacklinkAnalysis } from "./src/server/helio-backlink-api.mjs";
 import { buildHelioCodeReadiness } from "./src/server/helio-code/readiness.mjs";
+import { executeHelioCodeJob } from "./scripts/helio-code-worker.mjs";
 import { appendHelioCodeLog, createHelioCodeJob, getHelioCodeJob, listHelioCodeJobs } from "./src/server/helio-code/store.mjs";
 import { getHelioCodeWorkerStatus, startHelioCodeWorker } from "./src/server/helio-code/worker-supervisor.mjs";
 import { createApprovalToken, decideApprovalRequest, getApprovalRequest, listApprovalRequests, saveApprovalRequest } from "./src/server/approval-channel/store.mjs";
@@ -208,83 +209,44 @@ function helioAuditReportApi() {
 function helioCodeApi() {
     var _this = this;
     var jobs = new Map();
-    var timers = new Map();
     var dbEnabled = function () { return !!String(process.env.DATABASE_URL || "").trim(); };
     var memoryFallbackAllowed = function () { return String(process.env.HELIO_CODE_ALLOW_MEMORY_FALLBACK || "false").toLowerCase() === "true"; };
-    var localCompleteJob = function (job) {
-        var now = new Date().toISOString();
-        var skill = selectHelioCodeSkill({ issueType: job.payload.issueType, skillId: job.payload.skillId });
-        var evidence = buildHelioCodeEvidence({
-            job: job,
-            repoProfile: {
-                framework: "queued-worker",
-                packageManager: "unknown",
-                buildCommand: "worker-managed",
-                testCommand: "worker-managed",
-                note: "Local dev adapter created this evidence. Production jobs are completed by the Helio Code worker.",
-            },
-            changedFiles: ["helio-code/".concat(job.payload.missionId, "-").concat(skill.id, ".md")],
-            checks: [
-                { name: "payload-validation", status: "passed", details: "Mission-to-code job payload accepted." },
-                { name: "skill-selection", status: "passed", details: "Selected ".concat(skill.name, ".") },
-            ],
-            pullRequestUrl: "",
-            branch: "helio-code/".concat(job.payload.missionId),
-        });
-        return __assign(__assign({}, job), { status: "code-pr-opened", updatedAt: now, result: evidence, logs: __spreadArray(__spreadArray([], job.logs, true), [
-                { at: now, level: "info", message: "Local Helio Code adapter prepared worker handoff evidence." },
-                { at: now, level: "info", message: "Production mode will clone the repo, run the coding agent, checks, and open a GitHub App PR." },
-            ], false) });
-    };
     var appendJobLog = function (job, level, message) {
         var now = new Date().toISOString();
         return __assign(__assign({}, job), { updatedAt: now, logs: __spreadArray(__spreadArray([], (Array.isArray(job.logs) ? job.logs : []), true), [{ at: now, level: level, message: message }], false) });
     };
-    var advanceLocalJobState = function (job) {
-        var _a;
-        var runningDelay = Number(process.env.HELIO_CODE_DEV_RUNNING_DELAY_MS || 1200);
-        var finishDelay = Number(process.env.HELIO_CODE_DEV_FINISH_DELAY_MS || 3800);
-        var simulateSuccess = String(process.env.HELIO_CODE_DEV_SIMULATE_SUCCESS || "false").toLowerCase() === "true";
-        var startedAt = Number(((_a = job === null || job === void 0 ? void 0 : job.result) === null || _a === void 0 ? void 0 : _a.localLifecycleStartedAt) || Date.parse((job === null || job === void 0 ? void 0 : job.createdAt) || "") || Date.now());
-        var elapsed = Date.now() - startedAt;
-        var status = String((job === null || job === void 0 ? void 0 : job.status) || "");
-        if (status === "code-queued" && elapsed >= runningDelay) {
-            return appendJobLog(__assign(__assign({}, job), { status: "code-running" }), "info", "Local adapter: job running. Waiting for real Helio Code worker or simulated completion.");
-        }
-        if ((status === "code-queued" || status === "code-running") && elapsed >= finishDelay) {
-            if (simulateSuccess)
-                return localCompleteJob(job);
-            return appendJobLog(__assign(__assign({}, job), { status: "code-failed", result: __assign(__assign({}, (job.result || {})), { failureReason: "Local dev adapter does not execute real repo changes by default. Configure production Helio Code worker to open real PRs." }) }), "error", "No production Helio Code worker attached. Marking as failed to avoid false success.");
-        }
-        return job;
-    };
-    var scheduleLocalLifecycle = function (jobId) {
-        var runningDelay = Number(process.env.HELIO_CODE_DEV_RUNNING_DELAY_MS || 1200);
-        var finishDelay = Number(process.env.HELIO_CODE_DEV_FINISH_DELAY_MS || 3800);
-        var simulateSuccess = String(process.env.HELIO_CODE_DEV_SIMULATE_SUCCESS || "false").toLowerCase() === "true";
-        var t1 = setTimeout(function () {
-            var current = jobs.get(jobId);
-            if (!current)
-                return;
-            var next = appendJobLog(__assign(__assign({}, current), { status: "code-running" }), "info", "Local adapter: job running. Waiting for real Helio Code worker or simulated completion.");
-            jobs.set(jobId, next);
-        }, Math.max(300, runningDelay));
-        var t2 = setTimeout(function () {
-            var current = jobs.get(jobId);
-            if (!current)
-                return;
-            if (simulateSuccess) {
-                var completed = localCompleteJob(current);
-                jobs.set(jobId, completed);
-                return;
+    var runLocalJob = function (jobId) { return __awaiter(_this, void 0, void 0, function () {
+        var current, running, result, error_2;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    current = jobs.get(jobId);
+                    if (!current)
+                        return [2 /*return*/];
+                    running = appendJobLog(__assign(__assign({}, current), { status: "code-running" }), "info", "PROCESSING AUDIT PIPELINE");
+                    jobs.set(jobId, running);
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 3, , 4]);
+                    return [4 /*yield*/, executeHelioCodeJob(running)];
+                case 2:
+                    result = _a.sent();
+                    if (!(result === null || result === void 0 ? void 0 : result.job)) {
+                        jobs.set(jobId, appendJobLog(__assign(__assign({}, running), { status: "code-failed", result: __assign(__assign({}, (running.result || {})), { failureReason: "Local Helio Code execution returned no job result." }) }), "error", "Local Helio Code execution returned no job result."));
+                        return [2 /*return*/];
+                    }
+                    jobs.set(jobId, __assign(__assign({}, result.job), { logs: Array.isArray(result.job.logs) ? result.job.logs : running.logs }));
+                    return [3 /*break*/, 4];
+                case 3:
+                    error_2 = _a.sent();
+                    jobs.set(jobId, appendJobLog(__assign(__assign({}, running), { status: "code-failed", result: __assign(__assign({}, (running.result || {})), { failureReason: (error_2 === null || error_2 === void 0 ? void 0 : error_2.message) || "Local Helio Code execution failed." }) }), "error", (error_2 === null || error_2 === void 0 ? void 0 : error_2.message) || "Local Helio Code execution failed."));
+                    return [3 /*break*/, 4];
+                case 4: return [2 /*return*/];
             }
-            var failed = appendJobLog(__assign(__assign({}, current), { status: "code-failed", result: __assign(__assign({}, (current.result || {})), { failureReason: "Local dev adapter does not execute real repo changes by default. Configure production Helio Code worker to open real PRs." }) }), "error", "No production Helio Code worker attached. Marking as failed to avoid false success.");
-            jobs.set(jobId, failed);
-        }, Math.max(1200, finishDelay));
-        timers.set(jobId, [t1, t2]);
-    };
+        });
+    }); };
     var handler = function (req, res, next) { return __awaiter(_this, void 0, void 0, function () {
-        var urlObj, method, parts, jobId, _a, _b, _c, _d, _e, _f, payload, created_1, _g, _h, created, queued, job_1, current, job, job_2, job, rows, error_2;
+        var urlObj, method, parts, jobId, _a, _b, _c, _d, _e, _f, payload, created_1, _g, _h, created, queued, job_1, current, job, job_2, job, rows, error_3;
         var _j;
         var _k;
         return __generator(this, function (_l) {
@@ -338,12 +300,11 @@ function helioCodeApi() {
                     if (!created.ok)
                         return [2 /*return*/, sendJson(res, 400, { ok: false, errors: created.errors })];
                     queued = appendJobLog(__assign(__assign({}, created.job), { status: "code-queued", result: {
-                            mode: "local-dev-adapter",
-                            note: "Queued in local adapter. Real PR creation requires production Helio Code worker.",
-                            localLifecycleStartedAt: Date.now(),
+                            mode: "local-execution",
+                            note: "Queued in local execution mode. Helio will clone the repo, run the coding agent, verify checks, and push a PR from this machine.",
                         } }), "info", "Local adapter accepted job. Queueing execution lifecycle.");
                     jobs.set(queued.id, queued);
-                    scheduleLocalLifecycle(queued.id);
+                    void runLocalJob(queued.id);
                     return [2 /*return*/, sendJson(res, 202, { ok: true, job: queued })];
                 case 12:
                     if (!(method === "GET" && parts[2] === "jobs" && jobId && parts.length === 4)) return [3 /*break*/, 15];
@@ -356,11 +317,9 @@ function helioCodeApi() {
                     return [2 /*return*/, sendJson(res, 200, { ok: true, job: job_1 })];
                 case 14:
                     current = jobs.get(jobId);
-                    job = current ? advanceLocalJobState(current) : null;
+                    job = current || null;
                     if (!job)
                         return [2 /*return*/, sendJson(res, 404, { ok: false, error: "Helio Code job not found" })];
-                    if (current !== job)
-                        jobs.set(jobId, job);
                     return [2 /*return*/, sendJson(res, 200, { ok: true, job: job })];
                 case 15:
                     if (!(method === "GET" && parts[2] === "jobs" && jobId && parts[4] === "events")) return [3 /*break*/, 18];
@@ -402,8 +361,8 @@ function helioCodeApi() {
                 case 20: return [2 /*return*/, sendJson(res, 200, { ok: true, jobs: Array.from(jobs.values()) })];
                 case 21: return [2 /*return*/, sendJson(res, 405, { ok: false, error: "Method not allowed" })];
                 case 22:
-                    error_2 = _l.sent();
-                    return [2 /*return*/, sendJson(res, 500, { ok: false, error: (error_2 === null || error_2 === void 0 ? void 0 : error_2.message) || "Internal error" })];
+                    error_3 = _l.sent();
+                    return [2 /*return*/, sendJson(res, 500, { ok: false, error: (error_3 === null || error_3 === void 0 ? void 0 : error_3.message) || "Internal error" })];
                 case 23: return [2 /*return*/];
             }
         });
@@ -512,7 +471,7 @@ function approvalChannelApi() {
         });
     }); };
     var handler = function (req, res, next) { return __awaiter(_this, void 0, void 0, function () {
-        var urlObj, method, token_1, decision, record, decided, label, dashboardUrl_1, orgId, host, decisions, body, provider, webhookUrl, title, message, dashboardUrl, approval, token, baseUrl, approveUrl, rejectUrl, error_3;
+        var urlObj, method, token_1, decision, record, decided, label, dashboardUrl_1, orgId, host, decisions, body, provider, webhookUrl, title, message, dashboardUrl, approval, token, baseUrl, approveUrl, rejectUrl, error_4;
         var _a;
         return __generator(this, function (_b) {
             switch (_b.label) {
@@ -623,8 +582,8 @@ function approvalChannelApi() {
                     _b.label = 12;
                 case 12: return [2 /*return*/, sendJson(res, 200, { ok: true, token: token, approveUrl: approveUrl, rejectUrl: rejectUrl })];
                 case 13:
-                    error_3 = _b.sent();
-                    return [2 /*return*/, sendJson(res, 500, { ok: false, error: (error_3 === null || error_3 === void 0 ? void 0 : error_3.message) || "Failed to send approval request" })];
+                    error_4 = _b.sent();
+                    return [2 /*return*/, sendJson(res, 500, { ok: false, error: (error_4 === null || error_4 === void 0 ? void 0 : error_4.message) || "Failed to send approval request" })];
                 case 14: return [2 /*return*/];
             }
         });
@@ -718,7 +677,7 @@ function aeoIntelligenceApi() {
         });
     };
     var handler = function (req, res, next) { return __awaiter(_this, void 0, void 0, function () {
-        var urlObj, method, body, prompt_1, targetHost_1, connectors, observations_1, errors, connectorStats, add, _a, r, latencyMs, attempts, d, text, e_3, _b, r, latencyMs, attempts, d, text, e_4, _c, r, latencyMs, attempts, d, text, e_5, endpoint, _d, r, latencyMs, attempts, d, rows, _i, rows_1, row, q, e_6, error_4;
+        var urlObj, method, body, prompt_1, targetHost_1, connectors, observations_1, errors, connectorStats, add, _a, r, latencyMs, attempts, d, text, e_3, _b, r, latencyMs, attempts, d, text, e_4, _c, r, latencyMs, attempts, d, text, e_5, endpoint, _d, r, latencyMs, attempts, d, rows, _i, rows_1, row, q, e_6, error_5;
         var _e, _f, _g, _h, _j, _k, _l;
         return __generator(this, function (_m) {
             switch (_m.label) {
@@ -872,8 +831,8 @@ function aeoIntelligenceApi() {
                     return [3 /*break*/, 21];
                 case 21: return [2 /*return*/, sendJson(res, 200, { ok: true, observations: observations_1, errors: errors, connectorStats: connectorStats })];
                 case 22:
-                    error_4 = _m.sent();
-                    return [2 /*return*/, sendJson(res, 500, { ok: false, error: (error_4 === null || error_4 === void 0 ? void 0 : error_4.message) || "Internal error" })];
+                    error_5 = _m.sent();
+                    return [2 /*return*/, sendJson(res, 500, { ok: false, error: (error_5 === null || error_5 === void 0 ? void 0 : error_5.message) || "Internal error" })];
                 case 23: return [2 /*return*/];
             }
         });
@@ -891,7 +850,7 @@ function aeoIntelligenceApi() {
 function modelCatalogApi() {
     var _this = this;
     var handler = function (req, res, next) { return __awaiter(_this, void 0, void 0, function () {
-        var urlObj, method, body, provider, apiKey, action, model, normalize, tr, td, r, d, tr, td, r, d, tr, td, r, d, error_5;
+        var urlObj, method, body, provider, apiKey, action, model, normalize, tr, td, r, d, tr, td, r, d, tr, td, r, d, error_6;
         var _a, _b, _c, _d, _e, _f, _g;
         return __generator(this, function (_h) {
             switch (_h.label) {
@@ -1026,8 +985,8 @@ function modelCatalogApi() {
                     return [2 /*return*/, sendJson(res, 200, { ok: true, models: normalize(Array.isArray(d === null || d === void 0 ? void 0 : d.data) ? d.data : []) })];
                 case 19: return [2 /*return*/, sendJson(res, 400, { ok: false, error: "Unsupported provider" })];
                 case 20:
-                    error_5 = _h.sent();
-                    return [2 /*return*/, sendJson(res, 500, { ok: false, error: (error_5 === null || error_5 === void 0 ? void 0 : error_5.message) || "Failed to load model catalog" })];
+                    error_6 = _h.sent();
+                    return [2 /*return*/, sendJson(res, 500, { ok: false, error: (error_6 === null || error_6 === void 0 ? void 0 : error_6.message) || "Failed to load model catalog" })];
                 case 21: return [2 /*return*/];
             }
         });

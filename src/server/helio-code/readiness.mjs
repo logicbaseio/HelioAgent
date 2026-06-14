@@ -24,10 +24,10 @@ export async function readHelioCodeWorkerHeartbeat({ maxAgeMs = Number(process.e
     const data = JSON.parse(raw);
     const ageMs = Date.now() - Date.parse(String(data?.at || ""));
     return {
+      ...data,
       ok: Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= maxAgeMs,
       stale: !(Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= maxAgeMs),
       ageMs: Number.isFinite(ageMs) ? ageMs : null,
-      ...data,
     };
   } catch {
     return { ok: false, stale: true, ageMs: null, workerId: "", status: "missing", at: "" };
@@ -36,6 +36,7 @@ export async function readHelioCodeWorkerHeartbeat({ maxAgeMs = Number(process.e
 
 export async function buildHelioCodeReadiness() {
   const hasDb = !!String(process.env.DATABASE_URL || "").trim();
+  const memoryFallback = String(process.env.HELIO_CODE_ALLOW_MEMORY_FALLBACK || "false").toLowerCase() === "true";
   const hasWorkerCmd = !!String(process.env.HELIO_CODE_AGENT_COMMAND || "").trim();
   const hasGithubPrivateKey = !!String(process.env.GITHUB_APP_PRIVATE_KEY || "").trim();
   const hasGithubAppId = !!String(process.env.GITHUB_APP_ID || "").trim();
@@ -43,15 +44,25 @@ export async function buildHelioCodeReadiness() {
   const hasRepoUrl = !!String(process.env.HELIO_CODE_REPO_URL || "").trim();
   const hasGithubAuth = (hasGithubPrivateKey && hasGithubAppId) || hasEnvGithubToken;
   const heartbeat = await readHelioCodeWorkerHeartbeat();
+  const queueReady = hasDb || memoryFallback;
   const productionCapable = hasDb && hasWorkerCmd && hasGithubAuth;
   const productionReady = productionCapable && heartbeat.ok;
+  const localCapable = !hasDb && memoryFallback && hasWorkerCmd;
+  const localReady = localCapable;
   const mode = productionReady
     ? "production-ready"
     : productionCapable
       ? "production-capable-no-worker"
-      : "local-adapter";
+      : localReady
+        ? "local-execution-ready"
+        : "local-adapter";
   const checks = [
-    { id: "database", label: "DATABASE_URL", pass: hasDb, detail: hasDb ? "Configured" : "Missing durable job queue" },
+    {
+      id: "database",
+      label: hasDb ? "DATABASE_URL" : "Local Queue",
+      pass: queueReady,
+      detail: hasDb ? "Configured" : memoryFallback ? "In-memory local queue enabled" : "Missing durable job queue",
+    },
     { id: "worker_command", label: "HELIO_CODE_AGENT_COMMAND", pass: hasWorkerCmd, detail: hasWorkerCmd ? "Configured" : "Missing coding agent command" },
     {
       id: "github_auth",
@@ -69,9 +80,11 @@ export async function buildHelioCodeReadiness() {
     },
     {
       id: "worker_heartbeat",
-      label: "Worker Heartbeat",
-      pass: heartbeat.ok,
-      detail: heartbeat.ok
+      label: localReady ? "Worker Heartbeat / Direct Local Mode" : "Worker Heartbeat",
+      pass: localReady || heartbeat.ok,
+      detail: localReady
+        ? "Direct local execution mode active; background worker heartbeat not required"
+        : heartbeat.ok
         ? `${heartbeat.workerId || "worker"} active ${Math.round(Number(heartbeat.ageMs || 0) / 1000)}s ago`
         : "No active worker heartbeat",
     },
@@ -82,6 +95,9 @@ export async function buildHelioCodeReadiness() {
     mode,
     productionCapable,
     productionReady,
+    localCapable,
+    localReady,
+    memoryFallback,
     score,
     heartbeat,
     checks,

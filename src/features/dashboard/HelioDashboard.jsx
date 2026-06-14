@@ -1132,10 +1132,11 @@ function hasPassedReadinessCheck(readiness = {}, id = "") {
 function isHelioCodeReadyForProject(readiness = {}, integrations = {}) {
   const gh = integrations?.github?.fields || {};
   const hasProjectGithub = !!(integrations?.github?.connected && gh?.repo && (gh?.appInstallationId || gh?.token));
+  const localReady = !!readiness?.localReady || String(readiness?.mode || "") === "local-execution-ready";
   return (
     hasPassedReadinessCheck(readiness, "database") &&
     hasPassedReadinessCheck(readiness, "worker_command") &&
-    hasPassedReadinessCheck(readiness, "worker_heartbeat") &&
+    (localReady || hasPassedReadinessCheck(readiness, "worker_heartbeat")) &&
     (hasPassedReadinessCheck(readiness, "github_auth") || hasProjectGithub)
   );
 }
@@ -1143,9 +1144,11 @@ function isHelioCodeReadyForProject(readiness = {}, integrations = {}) {
 function canAttemptHelioCodeForProject(readiness = {}, integrations = {}) {
   const gh = integrations?.github?.fields || {};
   const hasProjectGithub = !!(integrations?.github?.connected && gh?.repo && (gh?.appInstallationId || gh?.token));
+  const localReady = !!readiness?.localReady || String(readiness?.mode || "") === "local-execution-ready";
   return (
     hasPassedReadinessCheck(readiness, "database") &&
     hasPassedReadinessCheck(readiness, "worker_command") &&
+    (localReady || hasPassedReadinessCheck(readiness, "worker_heartbeat")) &&
     hasProjectGithub
   );
 }
@@ -1160,6 +1163,7 @@ async function startHelioCodeWorkerFromApp() {
 async function ensureHelioCodeWorkerReady(integrations = {}) {
   let readiness = await fetchHelioCodeReadiness();
   if (isHelioCodeReadyForProject(readiness, integrations)) return readiness;
+  if (readiness?.localReady || String(readiness?.mode || "") === "local-execution-ready") return readiness;
   const canStart = hasPassedReadinessCheck(readiness, "database") && hasPassedReadinessCheck(readiness, "worker_command");
   if (canStart && !hasPassedReadinessCheck(readiness, "worker_heartbeat")) {
     await startHelioCodeWorkerFromApp();
@@ -1186,7 +1190,9 @@ function helioCodeReadinessFailure(readiness = {}, integrations = {}) {
     .map((check) => `${check.label || check.id}: ${check.detail || "missing"}`);
   return [
     `Helio Code is not production-ready (mode: ${readiness?.mode || "unknown"}, score: ${readiness?.score ?? "n/a"}).`,
-    "Real repo editing requires database queue, worker heartbeat, agent command, and GitHub auth from env or Integrations.",
+    readiness?.localCapable
+      ? "Local Helio Code execution is available, but required repo/agent prerequisites are still incomplete."
+      : "Real repo editing requires database queue or local queue fallback, worker/direct execution command, and GitHub auth from env or Integrations.",
     missing.length ? `Missing:\n- ${missing.join("\n- ")}` : "",
   ].filter(Boolean).join("\n");
 }
